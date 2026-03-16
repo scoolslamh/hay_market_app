@@ -1,0 +1,17 @@
+platform :ios, '14.0'
+
+prepare_command "ruby -e 'File.write(\"Podfile.lock\", \"\") unless File.exist?(\"Podfile.lock\")'"
+
+target 'Runner' do
+  use_frameworks!
+  use_flutter_plugins!
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
+    end
+  end
+end
