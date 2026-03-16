@@ -1,7 +1,8 @@
-# السطر القادم ضروري جداً لتعريف أوامر Flutter داخل الملف
+# السطر القادم ضروري جداً لربط إعدادات Flutter بنظام iOS
 target_ios_revision = File.join(File.dirname(__FILE__), 'Flutter', 'generated_ios_development_target.rb')
 load target_ios_revision if File.exist?(target_ios_revision)
 
+# تحديد الإصدار 14 لضمان عمل مكتبات مثل الخرائط (Google Maps)
 platform :ios, '14.0'
 
 target 'Runner' do
@@ -12,6 +13,8 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    
+    # إجبار جميع المكتبات الفرعية على استخدام نفس إصدار النظام
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
     end
