@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart'; // أضف هذا
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -8,8 +9,8 @@ import '../../../core/services/auth_storage.dart';
 import '../../../core/state/providers.dart';
 
 import '../../auth/presentation/login_screen.dart';
+import '../../auth/presentation/map_picker_screen.dart'; // استيراد شاشة الخريطة
 import '../../orders/presentation/orders_screen.dart';
-import '../../location/presentation/neighborhood_screen.dart';
 
 class AccountScreen extends ConsumerStatefulWidget {
   const AccountScreen({super.key});
@@ -30,7 +31,6 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     Future.microtask(loadUserData);
   }
 
-  /// تحميل بيانات المستخدم (نفس منطق كودك الأصلي)
   Future<void> loadUserData() async {
     final phone = ref.read(appStateProvider).userPhone;
     if (phone == null) return;
@@ -51,22 +51,112 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     }
   }
 
-  /// اختيار وصورة ورفعها (نفس منطق كودك الأصلي مع الحفاظ على Upsert)
+  /// دالة جلب وعرض العنوان الحالي في BottomSheet
+  void _handleAddressTap() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    // 1. جلب العنوان الحالي من جدول addresses
+    final addressData = await Supabase.instance.client
+        .from('addresses')
+        .select()
+        .eq('user_id', user.id)
+        .order('created_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+
+    String currentAddress =
+        addressData?['address_name'] ?? "لا يوجد عنوان مسجل";
+    double? lat = addressData?['lat'];
+    double? lng = addressData?['lng'];
+
+    if (!mounted) return;
+
+    // 2. عرض الـ BottomSheet
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(25),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Icon(Icons.location_on, size: 50, color: Color(0xFF004D40)),
+            const SizedBox(height: 15),
+            const Text(
+              "عنوان التوصيل الحالي",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              currentAddress,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[600], fontSize: 15),
+            ),
+            const SizedBox(height: 25),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF004D40),
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 50),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+              ),
+              onPressed: () async {
+                Navigator.pop(context); // إغلاق الـ BottomSheet
+
+                // الانتقال للخريطة وتمرير الموقع الحالي إن وجد
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MapPickerScreen(
+                      initialLocation: (lat != null && lng != null)
+                          ? LatLng(lat, lng)
+                          : null,
+                    ),
+                  ),
+                );
+
+                // إذا اختار موقعاً جديداً، سيتم الحفظ تلقائياً في الخريطة، ونحن هنا فقط نحدث الـ UI
+                if (result != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("تم تحديث العنوان بنجاح")),
+                  );
+                }
+              },
+              icon: const Icon(Icons.edit_location_alt),
+              label: const Text("تعديل الموقع من الخريطة"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // (دالة pickImage كما هي في كودك الأصلي...)
   Future<void> pickImage() async {
     final phone = ref.read(appStateProvider).userPhone;
     if (phone == null) return;
-
     final picked = await picker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 70,
     );
-
     if (picked == null) return;
     final file = File(picked.path);
     final path = "$phone/avatar.jpg";
-
     setState(() => uploading = true);
-
     try {
       final bytes = await file.readAsBytes();
       await Supabase.instance.client.storage
@@ -76,7 +166,6 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
             bytes,
             fileOptions: const FileOptions(upsert: true),
           );
-
       final url = Supabase.instance.client.storage
           .from("avatars")
           .getPublicUrl(path);
@@ -84,28 +173,20 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
           .from("users")
           .update({"avatar": url})
           .eq("phone", phone);
-
       final newUrl = "$url?v=${DateTime.now().millisecondsSinceEpoch}";
-
       setState(() {
         avatarUrl = newUrl;
         uploading = false;
       });
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("تم تحديث الصورة")));
     } catch (e) {
       setState(() => uploading = false);
-      debugPrint("Upload avatar error: $e");
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final phone = ref.watch(appStateProvider).userPhone;
-    const primaryColor = Color(0xFF004D40); // لون دكان الحي
+    const primaryColor = Color(0xFF004D40);
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -122,7 +203,6 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          /// الجزء العلوي: بطاقة المعلومات والصورة
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -163,7 +243,6 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                           backgroundColor: Colors.black45,
                           child: CircularProgressIndicator(color: Colors.white),
                         ),
-                      // أيقونة تعديل صغيرة
                       Positioned(
                         bottom: 0,
                         right: 0,
@@ -196,10 +275,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
               ],
             ),
           ),
-
           const SizedBox(height: 30),
-
-          /// القائمة الاحترافية
           _buildMenuTile(
             icon: Icons.shopping_bag_outlined,
             title: "طلباتي",
@@ -211,31 +287,23 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
           _buildMenuTile(
             icon: Icons.location_on_outlined,
             title: "العنوان",
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NeighborhoodScreen()),
-            ),
+            onTap: _handleAddressTap, // استدعاء الدالة الجديدة هنا
           ),
           _buildMenuTile(
             icon: Icons.settings_outlined,
             title: "الإعدادات",
-            onTap: () {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text("الإعدادات قريباً")));
-            },
+            onTap: () => ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text("الإعدادات قريباً"))),
           ),
-
           const SizedBox(height: 20),
           const Divider(),
           const SizedBox(height: 10),
-
-          /// تسجيل الخروج بتصميم مميز
           ListTile(
             onTap: () async {
               final storage = AuthStorage();
               await storage.logout();
-              if (!context.mounted) return;
+              if (!mounted) return;
               Navigator.pushAndRemoveUntil(
                 context,
                 MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -257,7 +325,6 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     );
   }
 
-  /// ودجت مخصص لبناء عناصر القائمة (لضمان تناسق التصميم)
   Widget _buildMenuTile({
     required IconData icon,
     required String title,

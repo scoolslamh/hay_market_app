@@ -12,9 +12,7 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  // مفتاح التحقق من النموذج
   final _formKey = GlobalKey<FormState>();
-
   final nameController = TextEditingController();
   final emailController = TextEditingController();
   final addressController = TextEditingController();
@@ -22,21 +20,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final supabase = Supabase.instance.client;
   bool _isLoading = false;
 
-  // دالة الحفظ مع التحقق
+  // متغير لحفظ بيانات الموقع الدقيقة (lat, lng, address) القادمة من الخريطة
+  Map<String, dynamic>? _selectedLocationData;
+
   Future<void> saveUser() async {
-    // 1. التأكد من صحة البيانات المدخلة أولاً
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
     try {
+      // 1. الحصول على هوية المستخدم الحالي (User ID)
+      final user = supabase.auth.currentUser;
+      if (user == null) throw "لم يتم العثور على جلسة مستخدم نشطة";
+
+      // 2. إدخال البيانات في جدول users (البيانات الشخصية)
       await supabase.from("users").insert({
+        "id": user.id, // نستخدم الـ ID الخاص بـ Auth
         "phone": widget.phone,
         "name": nameController.text,
         "email": emailController.text,
         "address": addressController.text,
-        "role": "customer", // تحديد الدور افتراضياً
+        "role": "customer",
       });
+
+      // 3. إدخال الموقع الدقيق في جدول addresses (موقع التوصيل)
+      if (_selectedLocationData != null) {
+        await supabase.from("addresses").insert({
+          "user_id": user.id,
+          "address_name": _selectedLocationData!['address'],
+          "lat": _selectedLocationData!['lat'],
+          "lng": _selectedLocationData!['lng'],
+        });
+      }
 
       if (!mounted) return;
 
@@ -53,21 +68,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  // دالة التقاط الموقع من الخريطة
   Future<void> pickLocation() async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const MapPickerScreen()),
     );
 
-    // التحقق من النتيجة (إذا كانت Map كما صممناها سابقاً أو String)
-    if (result != null) {
+    if (result != null && result is Map<String, dynamic>) {
       setState(() {
-        if (result is Map) {
-          addressController.text = result['address'];
-        } else {
-          addressController.text = result.toString();
-        }
+        _selectedLocationData =
+            result; // حفظ البيانات كاملة (الإحداثيات + النص)
+        addressController.text = result['address']; // عرض النص فقط للمستخدم
       });
     }
   }
@@ -77,10 +88,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text("إكمال التسجيل"), centerTitle: true),
       body: SingleChildScrollView(
-        // لتجنب مشاكل لوحة المفاتيح
         padding: const EdgeInsets.all(24),
         child: Form(
-          // إضافة الـ Form للتحقق
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -104,7 +113,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
               const SizedBox(height: 16),
 
-              // حقل البريد الإلكتروني مع التحقق
+              // حقل البريد الإلكتروني
               TextFormField(
                 controller: emailController,
                 keyboardType: TextInputType.emailAddress,
@@ -120,16 +129,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     return "يرجى إدخال البريد";
                   if (!RegExp(
                     r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                  ).hasMatch(value)) {
-                    return "يرجى إدخال بريد إلكتروني صحيح";
-                  }
+                  ).hasMatch(value))
+                    return "بريد غير صحيح";
                   return null;
                 },
               ),
 
               const SizedBox(height: 16),
 
-              // حقل العنوان (للقراءة فقط لأنه يأتي من الخريطة)
+              // حقل العنوان
               TextFormField(
                 controller: addressController,
                 readOnly: true,
@@ -164,14 +172,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
               const SizedBox(height: 40),
 
-              // زر الحفظ النهائي
+              // زر الحفظ
               _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(
-                          0xFF004D40,
-                        ), // لون دكان الحي
+                        backgroundColor: const Color(0xFF004D40),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
@@ -180,7 +186,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       onPressed: saveUser,
                       child: const Text(
-                        "حفظ البيانات وإكمال التسجيل",
+                        "حفظ وإكمال التسجيل",
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

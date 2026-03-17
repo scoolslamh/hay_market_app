@@ -2,28 +2,33 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // تأكد من استيراد سوبابيس
 
 class MapPickerScreen extends StatefulWidget {
-  const MapPickerScreen({super.key});
+  final LatLng? initialLocation;
+
+  const MapPickerScreen({super.key, this.initialLocation});
 
   @override
   State<MapPickerScreen> createState() => _MapPickerScreenState();
 }
 
 class _MapPickerScreenState extends State<MapPickerScreen> {
-  LatLng selectedLocation = const LatLng(24.7136, 46.6753); // الرياض افتراضياً
-  String addressName = "جاري تحديد الموقع...";
+  late LatLng selectedLocation;
+  String addressName = "جاري تحديد تفاصيل العنوان...";
   GoogleMapController? _mapController;
-  bool _isLoading = false; // لإظهار مؤشر تحميل أثناء الحفظ
 
   @override
   void initState() {
     super.initState();
-    _determinePosition();
+    selectedLocation = widget.initialLocation ?? const LatLng(24.7136, 46.6753);
+
+    if (widget.initialLocation == null) {
+      _determinePosition();
+    } else {
+      _updateLocation(selectedLocation);
+    }
   }
 
-  // طلب الموقع وتحريك الكاميرا وجلب اسم العنوان
   Future<void> _determinePosition() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return;
@@ -40,15 +45,14 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
     _updateLocation(currentLatLng);
 
     _mapController?.animateCamera(
-      CameraUpdate.newLatLngZoom(currentLatLng, 16),
+      CameraUpdate.newLatLngZoom(currentLatLng, 17),
     );
   }
 
-  // تحديث الإحداثيات واسم العنوان معاً
   Future<void> _updateLocation(LatLng location) async {
     setState(() {
       selectedLocation = location;
-      addressName = "جاري تحميل العنوان...";
+      addressName = "جاري تحميل تفاصيل العنوان...";
     });
 
     try {
@@ -61,71 +65,34 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
         setState(() {
-          // تنسيق العنوان بشكل مرتب
           addressName =
-              "${place.street}, ${place.subLocality}, ${place.locality}";
+              "${place.street ?? ''}, ${place.subLocality ?? ''}, ${place.locality ?? ''}";
+          addressName = addressName.replaceAll(RegExp(r'^, |, $'), '');
         });
       }
     } catch (e) {
       setState(() {
-        addressName = "تعذر تحديد اسم الشارع";
+        addressName = "تعذر تحديد اسم الشارع بدقة";
       });
-    }
-  }
-
-  // دالة حفظ العنوان في Supabase
-  Future<void> _saveAddress() async {
-    final user = Supabase.instance.client.auth.currentUser;
-
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("يرجى تسجيل الدخول لحفظ العنوان")),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      await Supabase.instance.client.from('addresses').insert({
-        'user_id': user.id,
-        'address_name': addressName,
-        'lat': selectedLocation.latitude,
-        'lng': selectedLocation.longitude,
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("تم حفظ الموقع في دكان الحي بنجاح")),
-        );
-        // العودة مع البيانات
-        Navigator.pop(context, {
-          "lat": selectedLocation.latitude,
-          "lng": selectedLocation.longitude,
-          "address": addressName,
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("خطأ أثناء الحفظ: $e")));
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("تحديد موقع التوصيل")),
+      appBar: AppBar(
+        title: const Text("تحديد موقع التوصيل"),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
       body: Stack(
         children: [
           GoogleMap(
             initialCameraPosition: CameraPosition(
               target: selectedLocation,
-              zoom: 14,
+              zoom: 16,
             ),
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
@@ -135,48 +102,89 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
               Marker(
                 markerId: const MarkerId("selected"),
                 position: selectedLocation,
+                icon: BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueRed,
+                ),
               ),
             },
           ),
           Positioned(
-            bottom: 20,
-            left: 10,
-            right: 10,
+            bottom: 30,
+            left: 15,
+            right: 15,
             child: Card(
-              elevation: 5,
+              elevation: 10,
+              shadowColor: Colors.black38,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.circular(25),
               ),
               child: Padding(
-                padding: const EdgeInsets.all(15.0),
+                padding: const EdgeInsets.all(20.0),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      "عنوان التوصيل المختار:",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey,
+                    Container(
+                      width: 40,
+                      height: 5,
+                      // --- تم تصحيح الخطأ هنا ---
+                      margin: const EdgeInsets.only(bottom: 15),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    const SizedBox(height: 5),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.location_on, color: Colors.red, size: 24),
+                        SizedBox(width: 8),
+                        Text(
+                          "موقع التوصيل المختار",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
                     Text(
                       addressName,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 16),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.w500,
+                        height: 1.4,
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    _isLoading
-                        ? const CircularProgressIndicator()
-                        : ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              minimumSize: const Size(double.infinity, 45),
-                              backgroundColor: Theme.of(context).primaryColor,
-                              foregroundColor: Colors.white,
-                            ),
-                            onPressed: _saveAddress,
-                            child: const Text("تأكيد وحفظ الموقع"),
-                          ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 55),
+                        backgroundColor: const Color(0xFF004D40),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(context, {
+                          "lat": selectedLocation.latitude,
+                          "lng": selectedLocation.longitude,
+                          "address": addressName,
+                        });
+                      },
+                      child: const Text(
+                        "تأكيد وحفظ الموقع",
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
