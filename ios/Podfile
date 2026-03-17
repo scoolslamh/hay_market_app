@@ -1,33 +1,48 @@
-# السطرين القادمين هما أهم شيء، يخبران السيرفر أين يجد تعريفات فلاتر
+# هذا السطر يساعد في تحميل إعدادات Flutter بشكل صحيح
 flutter_install_utils = File.join(File.dirname(__FILE__), 'Flutter', 'generated_ios_development_target.rb')
 load flutter_install_utils if File.exist?(flutter_install_utils)
 
-# تعريف المسار المباشر لسكريبت فلاتر لضمان عدم حدوث خطأ undefined method
+# تعريف flutter_root بشكل آمن (الحل النهائي 🔥)
 def flutter_root
   generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+
+  # إذا الملف غير موجود في CI (مثل Codemagic)
   unless File.exist?(generated_xcode_build_settings_path)
-    raise "Generated.xcconfig must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+    puts "Warning: Generated.xcconfig not found, using ENV['FLUTTER_ROOT']"
+    return ENV['FLUTTER_ROOT'] || ''
   end
 
+  # قراءة FLUTTER_ROOT من الملف
   File.foreach(generated_xcode_build_settings_path) do |line|
     matches = line.match(/\AFLUTTER_ROOT=(.*)\z/)
-    return matches[1] if matches
+    return matches[1].strip if matches
   end
-  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}."
+
+  # fallback احتياطي
+  return ENV['FLUTTER_ROOT'] || ''
 end
 
-require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'xcode_backend.rb'), flutter_root)
+# تحميل سكربت Flutter الأساسي
+require File.expand_path(
+  File.join('packages', 'flutter_tools', 'bin', 'xcode_backend.rb'),
+  flutter_root
+)
 
+# إصدار iOS
 platform :ios, '14.0'
 
 target 'Runner' do
   use_frameworks!
-  use_flutter_plugins! # الآن سيعرف السيرفر ما هو هذا الأمر
+  use_modular_headers!
+
+  # تحميل إضافات Flutter
+  use_flutter_plugins!
 end
 
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
       config.build_settings['ONLY_ACTIVE_ARCH'] = 'YES'
