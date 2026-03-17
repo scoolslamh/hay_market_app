@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -22,9 +21,7 @@ class AccountScreen extends ConsumerStatefulWidget {
 class _AccountScreenState extends ConsumerState<AccountScreen> {
   String? userName;
   String? avatarUrl;
-
   bool uploading = false;
-
   final picker = ImagePicker();
 
   @override
@@ -33,10 +30,9 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     Future.microtask(loadUserData);
   }
 
-  /// تحميل بيانات المستخدم
+  /// تحميل بيانات المستخدم (نفس منطق كودك الأصلي)
   Future<void> loadUserData() async {
     final phone = ref.read(appStateProvider).userPhone;
-
     if (phone == null) return;
 
     try {
@@ -55,10 +51,9 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     }
   }
 
-  /// اختيار صورة
+  /// اختيار وصورة ورفعها (نفس منطق كودك الأصلي مع الحفاظ على Upsert)
   Future<void> pickImage() async {
     final phone = ref.read(appStateProvider).userPhone;
-
     if (phone == null) return;
 
     final picked = await picker.pickImage(
@@ -67,18 +62,13 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     );
 
     if (picked == null) return;
-
     final file = File(picked.path);
-
     final path = "$phone/avatar.jpg";
 
-    setState(() {
-      uploading = true;
-    });
+    setState(() => uploading = true);
 
     try {
       final bytes = await file.readAsBytes();
-
       await Supabase.instance.client.storage
           .from("avatars")
           .uploadBinary(
@@ -90,14 +80,11 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       final url = Supabase.instance.client.storage
           .from("avatars")
           .getPublicUrl(path);
-
-      /// تحديث قاعدة البيانات
       await Supabase.instance.client
           .from("users")
           .update({"avatar": url})
           .eq("phone", phone);
 
-      /// منع cache
       final newUrl = "$url?v=${DateTime.now().millisecondsSinceEpoch}";
 
       setState(() {
@@ -106,15 +93,11 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       });
 
       if (!mounted) return;
-
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("تم تحديث الصورة")));
     } catch (e) {
-      setState(() {
-        uploading = false;
-      });
-
+      setState(() => uploading = false);
       debugPrint("Upload avatar error: $e");
     }
   }
@@ -122,70 +105,93 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
   @override
   Widget build(BuildContext context) {
     final phone = ref.watch(appStateProvider).userPhone;
+    const primaryColor = Color(0xFF004D40); // لون دكان الحي
 
     return Scaffold(
-      appBar: AppBar(title: const Text("الحساب")),
-
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: const Text(
+          "حسابي",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+      ),
       body: ListView(
         padding: const EdgeInsets.all(20),
-
         children: [
-          /// صورة المستخدم
-          Center(
-            child: GestureDetector(
-              onTap: pickImage,
-
-              child: Stack(
-                alignment: Alignment.center,
-
-                children: [
-                  CircleAvatar(
-                    radius: 45,
-                    backgroundColor: Colors.green.shade100,
-                    backgroundImage: avatarUrl != null
-                        ? NetworkImage(avatarUrl!)
-                        : null,
-                    child: avatarUrl == null
-                        ? const Icon(Icons.camera_alt, size: 32)
-                        : null,
-                  ),
-
-                  if (uploading)
-                    Container(
-                      width: 90,
-                      height: 90,
-                      decoration: BoxDecoration(
-                        color: Colors.black45,
-                        borderRadius: BorderRadius.circular(45),
-                      ),
-                      child: const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
-                      ),
-                    ),
-                ],
-              ),
+          /// الجزء العلوي: بطاقة المعلومات والصورة
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: primaryColor,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: primaryColor.withOpacity(0.3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
             ),
-          ),
-
-          const SizedBox(height: 12),
-
-          /// الهاتف + الاسم
-          Center(
             child: Column(
               children: [
+                GestureDetector(
+                  onTap: pickImage,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CircleAvatar(
+                        radius: 50,
+                        backgroundColor: Colors.white24,
+                        backgroundImage: avatarUrl != null
+                            ? NetworkImage(avatarUrl!)
+                            : null,
+                        child: avatarUrl == null
+                            ? const Icon(
+                                Icons.camera_alt,
+                                size: 35,
+                                color: Colors.white,
+                              )
+                            : null,
+                      ),
+                      if (uploading)
+                        const CircleAvatar(
+                          radius: 50,
+                          backgroundColor: Colors.black45,
+                          child: CircularProgressIndicator(color: Colors.white),
+                        ),
+                      // أيقونة تعديل صغيرة
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: CircleAvatar(
+                          radius: 15,
+                          backgroundColor: Colors.white,
+                          child: Icon(
+                            Icons.edit,
+                            size: 15,
+                            color: primaryColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 15),
                 Text(
-                  phone ?? "",
+                  userName ?? "مستخدم دكان الحي",
                   style: const TextStyle(
-                    fontSize: 18,
+                    color: Colors.white,
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-
-                const SizedBox(height: 4),
-
                 Text(
-                  userName ?? "",
-                  style: const TextStyle(fontSize: 16, color: Colors.grey),
+                  phone ?? "",
+                  style: const TextStyle(color: Colors.white70, fontSize: 16),
                 ),
               ],
             ),
@@ -193,42 +199,26 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
 
           const SizedBox(height: 30),
 
-          const Divider(),
-
-          /// طلباتي
-          ListTile(
-            leading: const Icon(Icons.shopping_bag),
-            title: const Text("طلباتي"),
-            trailing: const Icon(Icons.arrow_forward_ios),
-
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const OrdersScreen()),
-              );
-            },
+          /// القائمة الاحترافية
+          _buildMenuTile(
+            icon: Icons.shopping_bag_outlined,
+            title: "طلباتي",
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const OrdersScreen()),
+            ),
           ),
-
-          /// العنوان
-          ListTile(
-            leading: const Icon(Icons.location_on),
-            title: const Text("العنوان"),
-            trailing: const Icon(Icons.arrow_forward_ios),
-
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const NeighborhoodScreen()),
-              );
-            },
+          _buildMenuTile(
+            icon: Icons.location_on_outlined,
+            title: "العنوان",
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NeighborhoodScreen()),
+            ),
           ),
-
-          /// الإعدادات
-          ListTile(
-            leading: const Icon(Icons.settings),
-            title: const Text("الإعدادات"),
-            trailing: const Icon(Icons.arrow_forward_ios),
-
+          _buildMenuTile(
+            icon: Icons.settings_outlined,
+            title: "الإعدادات",
             onTap: () {
               ScaffoldMessenger.of(
                 context,
@@ -236,30 +226,62 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
             },
           ),
 
+          const SizedBox(height: 20),
           const Divider(),
+          const SizedBox(height: 10),
 
-          /// تسجيل الخروج
+          /// تسجيل الخروج بتصميم مميز
           ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text(
-              "تسجيل الخروج",
-              style: TextStyle(color: Colors.red),
-            ),
-
             onTap: () async {
               final storage = AuthStorage();
               await storage.logout();
-
               if (!context.mounted) return;
-
               Navigator.pushAndRemoveUntil(
                 context,
                 MaterialPageRoute(builder: (_) => const LoginScreen()),
                 (route) => false,
               );
             },
+            leading: const Icon(Icons.logout, color: Colors.red),
+            title: const Text(
+              "تسجيل الخروج",
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+            ),
+            tileColor: Colors.red.withOpacity(0.05),
           ),
         ],
+      ),
+    );
+  }
+
+  /// ودجت مخصص لبناء عناصر القائمة (لضمان تناسق التصميم)
+  Widget _buildMenuTile({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: ListTile(
+        leading: Icon(icon, color: const Color(0xFF004D40)),
+        title: Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+        ),
+        trailing: const Icon(
+          Icons.arrow_forward_ios,
+          size: 16,
+          color: Colors.grey,
+        ),
+        onTap: onTap,
       ),
     );
   }

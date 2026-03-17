@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // تأكد من استيراد سوبابيس
 
 class MapPickerScreen extends StatefulWidget {
   const MapPickerScreen({super.key});
@@ -14,6 +15,7 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
   LatLng selectedLocation = const LatLng(24.7136, 46.6753); // الرياض افتراضياً
   String addressName = "جاري تحديد الموقع...";
   GoogleMapController? _mapController;
+  bool _isLoading = false; // لإظهار مؤشر تحميل أثناء الحفظ
 
   @override
   void initState() {
@@ -21,7 +23,7 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
     _determinePosition();
   }
 
-  // دالة طلب الموقع وتحريك الكاميرا وجلب اسم العنوان
+  // طلب الموقع وتحريك الكاميرا وجلب اسم العنوان
   Future<void> _determinePosition() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return;
@@ -42,7 +44,7 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
     );
   }
 
-  // دالة لتحديث الإحداثيات واسم العنوان معاً
+  // تحديث الإحداثيات واسم العنوان معاً
   Future<void> _updateLocation(LatLng location) async {
     setState(() {
       selectedLocation = location;
@@ -53,13 +55,13 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
       List<Placemark> placemarks = await placemarkFromCoordinates(
         location.latitude,
         location.longitude,
-        localeIdentifier: "ar", // لإظهار العنوان بالعربي
+        localeIdentifier: "ar",
       );
 
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
         setState(() {
-          // تركيب العنوان: الشارع، الحي، المدينة
+          // تنسيق العنوان بشكل مرتب
           addressName =
               "${place.street}, ${place.subLocality}, ${place.locality}";
         });
@@ -68,6 +70,49 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
       setState(() {
         addressName = "تعذر تحديد اسم الشارع";
       });
+    }
+  }
+
+  // دالة حفظ العنوان في Supabase
+  Future<void> _saveAddress() async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("يرجى تسجيل الدخول لحفظ العنوان")),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      await Supabase.instance.client.from('addresses').insert({
+        'user_id': user.id,
+        'address_name': addressName,
+        'lat': selectedLocation.latitude,
+        'lng': selectedLocation.longitude,
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("تم حفظ الموقع في دكان الحي بنجاح")),
+        );
+        // العودة مع البيانات
+        Navigator.pop(context, {
+          "lat": selectedLocation.latitude,
+          "lng": selectedLocation.longitude,
+          "address": addressName,
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("خطأ أثناء الحفظ: $e")));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -93,7 +138,6 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
               ),
             },
           ),
-          // واجهة عرض العنوان في الأسفل
           Positioned(
             bottom: 20,
             left: 10,
@@ -122,20 +166,17 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
                       style: const TextStyle(fontSize: 16),
                     ),
                     const SizedBox(height: 10),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 45),
-                      ),
-                      onPressed: () {
-                        // نرسل الإحداثيات مع العنوان النصي
-                        Navigator.pop(context, {
-                          "lat": selectedLocation.latitude,
-                          "lng": selectedLocation.longitude,
-                          "address": addressName,
-                        });
-                      },
-                      child: const Text("تأكيد الموقع"),
-                    ),
+                    _isLoading
+                        ? const CircularProgressIndicator()
+                        : ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: const Size(double.infinity, 45),
+                              backgroundColor: Theme.of(context).primaryColor,
+                              foregroundColor: Colors.white,
+                            ),
+                            onPressed: _saveAddress,
+                            child: const Text("تأكيد وحفظ الموقع"),
+                          ),
                   ],
                 ),
               ),
