@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geolocator/geolocator.dart'; // تأكد من وجود هذه المكتبة في pubspec.yaml
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 
 class MapPickerScreen extends StatefulWidget {
   const MapPickerScreen({super.key});
@@ -11,75 +12,136 @@ class MapPickerScreen extends StatefulWidget {
 
 class _MapPickerScreenState extends State<MapPickerScreen> {
   LatLng selectedLocation = const LatLng(24.7136, 46.6753); // الرياض افتراضياً
+  String addressName = "جاري تحديد الموقع...";
   GoogleMapController? _mapController;
 
   @override
   void initState() {
     super.initState();
-    _determinePosition(); // طلب الموقع عند فتح الشاشة
+    _determinePosition();
   }
 
-  // دالة لطلب الإذن والحصول على الموقع الحالي
+  // دالة طلب الموقع وتحريك الكاميرا وجلب اسم العنوان
   Future<void> _determinePosition() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return;
 
-    permission = await Geolocator.checkPermission();
+    LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) return;
     }
 
-    if (permission == LocationPermission.deniedForever) return;
-
-    // الحصول على الموقع وتحريك الكاميرا إليه
     Position position = await Geolocator.getCurrentPosition();
     LatLng currentLatLng = LatLng(position.latitude, position.longitude);
 
-    setState(() {
-      selectedLocation = currentLatLng;
-    });
+    _updateLocation(currentLatLng);
 
     _mapController?.animateCamera(
-      CameraUpdate.newLatLngZoom(currentLatLng, 15),
+      CameraUpdate.newLatLngZoom(currentLatLng, 16),
     );
+  }
+
+  // دالة لتحديث الإحداثيات واسم العنوان معاً
+  Future<void> _updateLocation(LatLng location) async {
+    setState(() {
+      selectedLocation = location;
+      addressName = "جاري تحميل العنوان...";
+    });
+
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        location.latitude,
+        location.longitude,
+        localeIdentifier: "ar", // لإظهار العنوان بالعربي
+      );
+
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks[0];
+        setState(() {
+          // تركيب العنوان: الشارع، الحي، المدينة
+          addressName =
+              "${place.street}, ${place.subLocality}, ${place.locality}";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        addressName = "تعذر تحديد اسم الشارع";
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("اختيار الموقع")),
-      body: GoogleMap(
-        initialCameraPosition: CameraPosition(
-          target: selectedLocation,
-          zoom: 14,
-        ),
-        myLocationEnabled: true, // إظهار النقطة الزرقاء
-        myLocationButtonEnabled: true, // إظهار زر "موقعي"
-        onMapCreated: (controller) => _mapController = controller,
-        onTap: (location) {
-          setState(() {
-            selectedLocation = location;
-          });
-        },
-        markers: {
-          Marker(
-            markerId: const MarkerId("selected"),
-            position: selectedLocation,
+      appBar: AppBar(title: const Text("تحديد موقع التوصيل")),
+      body: Stack(
+        children: [
+          GoogleMap(
+            initialCameraPosition: CameraPosition(
+              target: selectedLocation,
+              zoom: 14,
+            ),
+            myLocationEnabled: true,
+            myLocationButtonEnabled: true,
+            onMapCreated: (controller) => _mapController = controller,
+            onTap: (location) => _updateLocation(location),
+            markers: {
+              Marker(
+                markerId: const MarkerId("selected"),
+                position: selectedLocation,
+              ),
+            },
           ),
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        child: const Icon(Icons.check),
-        onPressed: () {
-          Navigator.pop(
-            context,
-            "${selectedLocation.latitude}, ${selectedLocation.longitude}",
-          );
-        },
+          // واجهة عرض العنوان في الأسفل
+          Positioned(
+            bottom: 20,
+            left: 10,
+            right: 10,
+            child: Card(
+              elevation: 5,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(15.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      "عنوان التوصيل المختار:",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      addressName,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                    const SizedBox(height: 10),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 45),
+                      ),
+                      onPressed: () {
+                        // نرسل الإحداثيات مع العنوان النصي
+                        Navigator.pop(context, {
+                          "lat": selectedLocation.latitude,
+                          "lng": selectedLocation.longitude,
+                          "address": addressName,
+                        });
+                      },
+                      child: const Text("تأكيد الموقع"),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
