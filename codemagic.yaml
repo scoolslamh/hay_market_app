@@ -1,19 +1,22 @@
 workflows:
   ios-workflow:
-    name: iOS Build Fix
+    name: iOS Build Fixed
     environment:
       flutter: stable
       xcode: latest
 
     scripts:
-      - name: Clean
+      - name: Flutter clean
         script: flutter clean
 
-      - name: Get packages
+      - name: Install packages
         script: flutter pub get
 
-      - name: Generate iOS files
-        script: flutter build ios --release --no-codesign
+      - name: Install pods manually
+        script: |
+          cd ios
+          pod install
+          cd ..
 
-    artifacts:
-      - build/ios/iphoneos/*.app
+      - name: Build iOS
+        script: flutter build ios --release --no-codesign
