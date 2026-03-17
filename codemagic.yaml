@@ -1,6 +1,6 @@
 workflows:
   ios-workflow:
-    name: iOS Build Fixed
+    name: iOS Clean Build
 
     environment:
       flutter: stable
@@ -13,8 +13,5 @@ workflows:
       - name: Get packages
         script: flutter pub get
 
-      - name: Generate iOS config (الحل هنا 🔥)
-        script: flutter build ios --debug --no-codesign
-
-      - name: Build release
+      - name: Build iOS (الحل النهائي 🔥)
         script: flutter build ios --release --no-codesign
