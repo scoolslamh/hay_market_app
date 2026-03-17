@@ -1,8 +1,8 @@
 platform :ios, '14.0'
 
-# تحميل إعدادات Flutter التلقائية (هذا السطر هو المعيار)
-target_ios_revision = File.join(File.dirname(__FILE__), 'Flutter', 'generated_ios_development_target.rb')
-load target_ios_revision if File.exist?(target_ios_revision)
+# محاولة تحميل إعدادات فلاتر بدون إجبار (بدون تعليق البناء)
+flutter_install_utils = File.join(File.dirname(__FILE__), 'Flutter', 'generated_ios_development_target.rb')
+load flutter_install_utils if File.exist?(flutter_install_utils)
 
 target 'Runner' do
   use_frameworks!
@@ -14,6 +14,8 @@ post_install do |installer|
     flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
+      # حل مشكلة الـ ARCHS الشائعة في السيرفرات
+      config.build_settings['ONLY_ACTIVE_ARCH'] = 'YES'
     end
   end
 end
