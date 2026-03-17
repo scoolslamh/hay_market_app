@@ -1,42 +1,35 @@
-# هذا السطر يساعد في تحميل إعدادات Flutter بشكل صحيح
-flutter_install_utils = File.join(File.dirname(__FILE__), 'Flutter', 'generated_ios_development_target.rb')
-load flutter_install_utils if File.exist?(flutter_install_utils)
+platform :ios, '14.0'
 
-# تعريف flutter_root بشكل آمن (الحل النهائي 🔥)
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
 def flutter_root
   generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
-
-  # إذا الملف غير موجود في CI (مثل Codemagic)
   unless File.exist?(generated_xcode_build_settings_path)
-    puts "Warning: Generated.xcconfig not found, using ENV['FLUTTER_ROOT']"
-    return ENV['FLUTTER_ROOT'] || ''
+    raise "Generated.xcconfig not found. Run flutter pub get"
   end
 
-  # قراءة FLUTTER_ROOT من الملف
   File.foreach(generated_xcode_build_settings_path) do |line|
-    matches = line.match(/\AFLUTTER_ROOT=(.*)\z/)
+    matches = line.match(/FLUTTER_ROOT=(.*)/)
     return matches[1].strip if matches
   end
-
-  # fallback احتياطي
-  return ENV['FLUTTER_ROOT'] || ''
+  raise "FLUTTER_ROOT not found"
 end
 
-# تحميل سكربت Flutter الأساسي
-require File.expand_path(
-  File.join('packages', 'flutter_tools', 'bin', 'xcode_backend.rb'),
-  flutter_root
-)
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
 
-# إصدار iOS
-platform :ios, '14.0'
+flutter_ios_podfile_setup
 
 target 'Runner' do
   use_frameworks!
   use_modular_headers!
 
-  # تحميل إضافات Flutter
-  use_flutter_plugins!
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 end
 
 post_install do |installer|
@@ -45,7 +38,6 @@ post_install do |installer|
 
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
-      config.build_settings['ONLY_ACTIVE_ARCH'] = 'YES'
     end
   end
 end
