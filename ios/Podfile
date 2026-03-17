@@ -1,21 +1,39 @@
-# السطر القادم ضروري جداً لربط إعدادات Flutter بنظام iOS
+# 1. تعريف مسارات Flutter الأساسية للسيرفر
+def flutter_root
+  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "Generated.xcconfig must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+  end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/\AFLUTTER_ROOT=(.*)\z/)
+    return matches[1] if matches
+  end
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}."
+end
+
+# 2. تحميل سكربت الربط الخاص بـ Flutter
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'xcode_backend.rb'), flutter_root)
+
+# 3. تحميل إعدادات الأهداف (Targets)
 target_ios_revision = File.join(File.dirname(__FILE__), 'Flutter', 'generated_ios_development_target.rb')
 load target_ios_revision if File.exist?(target_ios_revision)
 
-# تحديد الإصدار 14 لضمان عمل مكتبات مثل الخرائط (Google Maps)
+# 4. إعدادات المنصة (iOS 14 للخرائط والمكتبات الحديثة)
 platform :ios, '14.0'
 
+# 5. بناء المشروع
 target 'Runner' do
   use_frameworks!
   use_flutter_plugins!
 end
 
+# 6. تهيئة ما بعد التثبيت لضبط الإصدارات يدوياً
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
-    
-    # إجبار جميع المكتبات الفرعية على استخدام نفس إصدار النظام
     target.build_configurations.each do |config|
+      # إجبار كل مكتبة فرعية على العمل بإصدار 14
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
     end
   end
