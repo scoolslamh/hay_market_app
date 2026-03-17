@@ -1,17 +1,25 @@
 workflows:
   ios-workflow:
-    name: iOS Clean Build
+    name: iOS Clean Build Final
 
     environment:
       flutter: stable
       xcode: latest
 
     scripts:
-      - name: Clean
+      - name: Clean project
         script: flutter clean
 
       - name: Get packages
         script: flutter pub get
 
-      - name: Build iOS (الحل النهائي 🔥)
+      - name: Fix CocoaPods (🔥 الحل هنا)
+        script: |
+          cd ios
+          rm -rf Pods
+          rm -rf Podfile.lock
+          pod repo update
+          cd ..
+
+      - name: Build iOS
         script: flutter build ios --release --no-codesign
