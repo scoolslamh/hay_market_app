@@ -7,7 +7,7 @@ import '../../../core/services/auth_storage.dart';
 
 import '../../auth/presentation/login_screen.dart';
 import '../../welcome/presentation/welcome_screen.dart';
-import '../../orders/presentation/orders_screen.dart';
+import '../../../core/navigation/main_navigation.dart'; // ✅ مهم
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -57,7 +57,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       return;
     }
 
-    /// ✅ حفظ رقم الجوال في AppState
+    /// ✅ حفظ رقم الجوال
     ref.read(appStateProvider.notifier).setUserPhone(phone);
 
     final neighborhoodId = selection["neighborhoodId"];
@@ -66,21 +66,21 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     final neighborhoodName = selection["neighborhoodName"];
     final marketName = selection["marketName"];
 
-    /// 🔥 دخول مباشر للطلبات
+    /// 🔥 مستخدم مكتمل → دخول للرئيسية (مو الطلبات)
     if (neighborhoodId != null && marketId != null) {
-      /// مهم: تمرير ID + NAME
       ref
           .read(appStateProvider.notifier)
           .setNeighborhood(neighborhoodId, neighborhoodName ?? "");
 
       ref.read(appStateProvider.notifier).setMarket(marketId, marketName ?? "");
 
+      /// ✅ هنا التعديل المهم
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const OrdersScreen()),
+        MaterialPageRoute(builder: (_) => const MainNavigation()),
       );
     } else {
-      /// 👇 المستخدم لم يكمل الإعداد
+      /// 👇 المستخدم جديد أو غير مكتمل
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const WelcomeScreen()),
