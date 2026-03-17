@@ -31,18 +31,23 @@ class AuthStorage {
   /// =========================
   Future<void> saveUserSelection({
     required String neighborhoodId,
-    required String marketId,
+    String? marketId, // ✅ صار اختياري
     String? neighborhoodName,
     String? marketName,
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
+      /// الحي
       await prefs.setString(_neighborhoodIdKey, neighborhoodId);
-      await prefs.setString(_marketIdKey, marketId);
 
       if (neighborhoodName != null) {
         await prefs.setString(_neighborhoodNameKey, neighborhoodName);
+      }
+
+      /// الماركت (اختياري)
+      if (marketId != null) {
+        await prefs.setString(_marketIdKey, marketId);
       }
 
       if (marketName != null) {
@@ -90,6 +95,15 @@ class AuthStorage {
     await prefs.remove(_neighborhoodIdKey);
     await prefs.remove(_marketIdKey);
     await prefs.remove(_neighborhoodNameKey);
+    await prefs.remove(_marketNameKey);
+  }
+
+  /// =========================
+  /// 🧹 مسح الماركت فقط (احترافي)
+  /// =========================
+  Future<void> clearMarket() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_marketIdKey);
     await prefs.remove(_marketNameKey);
   }
 }

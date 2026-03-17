@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/market.dart';
 import '../../../core/services/market_service.dart';
+import '../../../core/services/auth_storage.dart'; // ✅ مهم
 import '../../../core/state/providers.dart';
 import '../../../core/navigation/main_navigation.dart';
 
@@ -60,7 +61,6 @@ class _MarketsScreenState extends ConsumerState<MarketsScreen> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-
                   child: ListTile(
                     leading: market.image != null && market.image!.isNotEmpty
                         ? ClipRRect(
@@ -81,13 +81,29 @@ class _MarketsScreenState extends ConsumerState<MarketsScreen> {
 
                     trailing: const Icon(Icons.arrow_forward_ios),
 
-                    onTap: () {
-                      /// حفظ الماركت
+                    onTap: () async {
+                      /// ✅ حفظ في AppState
                       ref
                           .read(appStateProvider.notifier)
                           .setMarket(market.id, market.name);
 
-                      /// فتح التطبيق الرئيسي مع الشريط السفلي
+                      final neighborhoodId = ref
+                          .read(appStateProvider)
+                          .neighborhoodId;
+
+                      final neighborhoodName = ref
+                          .read(appStateProvider)
+                          .neighborhoodName;
+
+                      /// 🔥 حفظ في الجهاز (هذا هو الحل)
+                      await AuthStorage().saveUserSelection(
+                        neighborhoodId: neighborhoodId!,
+                        marketId: market.id,
+                        neighborhoodName: neighborhoodName,
+                        marketName: market.name,
+                      );
+
+                      /// الانتقال
                       Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(
