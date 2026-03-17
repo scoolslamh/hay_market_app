@@ -7,6 +7,7 @@ import '../../../core/services/auth_storage.dart';
 
 import '../../auth/presentation/login_screen.dart';
 import '../../welcome/presentation/welcome_screen.dart';
+import '../../orders/presentation/orders_screen.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -41,22 +42,45 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   Future<void> goNext() async {
     final storage = AuthStorage();
+
     final phone = await storage.getPhone();
+    final selection = await storage.getUserSelection();
 
     if (!mounted) return;
 
-    /// المستخدم غير مسجل دخول
+    /// ❌ غير مسجل دخول
     if (phone == null) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
       );
+      return;
     }
-    /// المستخدم مسجل دخول
-    else {
-      /// حفظ الرقم في Riverpod
-      ref.read(appStateProvider.notifier).setUserPhone(phone);
 
+    /// ✅ حفظ رقم الجوال في AppState
+    ref.read(appStateProvider.notifier).setUserPhone(phone);
+
+    final neighborhoodId = selection["neighborhoodId"];
+    final marketId = selection["marketId"];
+
+    final neighborhoodName = selection["neighborhoodName"];
+    final marketName = selection["marketName"];
+
+    /// 🔥 دخول مباشر للطلبات
+    if (neighborhoodId != null && marketId != null) {
+      /// مهم: تمرير ID + NAME
+      ref
+          .read(appStateProvider.notifier)
+          .setNeighborhood(neighborhoodId, neighborhoodName ?? "");
+
+      ref.read(appStateProvider.notifier).setMarket(marketId, marketName ?? "");
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const OrdersScreen()),
+      );
+    } else {
+      /// 👇 المستخدم لم يكمل الإعداد
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const WelcomeScreen()),
@@ -74,14 +98,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-
       body: Center(
         child: ScaleTransition(
           scale: scaleAnimation,
-
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-
             children: [
               /// شعار التطبيق
               Image.asset("assets/logo.png", width: 140),

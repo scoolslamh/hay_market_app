@@ -66,5 +66,16 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+<string>نحتاج موقعك لتحديد عنوان التوصيل</string>
+
+<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+<string>نحتاج موقعك لتحسين تجربة التطبيق</string>
+
+<key>NSCameraUsageDescription</key>
+<string>نحتاج الكاميرا لرفع الصور</string>
+
+<key>NSPhotoLibraryUsageDescription</key>
+<string>نحتاج الوصول للصور</string>
 </dict>
 </plist>
