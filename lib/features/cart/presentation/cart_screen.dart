@@ -37,7 +37,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       setState(() => isSending = true);
 
       // إرسال الطلب لـ Supabase
-      await orderService.createOrder(phone: phone, marketId: marketId);
+      await orderService.createOrder(marketId: marketId);
 
       // ✅ استدعاء الدالة بعد تعريفها في ملف الخدمة
       cartService.clearCart();

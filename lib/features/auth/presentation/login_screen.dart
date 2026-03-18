@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/state/providers.dart';
-import 'register_screen.dart'; // المسار: lib/features/auth/presentation/register_screen.dart
-import '../../home/presentation/home_screen.dart'; // المسار: lib/features/home/presentation/home_screen.dart
+import '../../../core/services/auth_storage.dart';
+import '../../../core/navigation/main_navigation.dart'; // ✅ مهم
+import 'register_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -21,51 +22,75 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> loginDirectly() async {
-    final phone = phoneController.text.trim();
+  String normalizePhone(String input) {
+    String phone = input.replaceAll(" ", "");
 
-    if (phone.isEmpty) {
+    if (phone.startsWith("05")) {
+      phone = "966${phone.substring(1)}";
+    } else if (phone.startsWith("+966")) {
+      phone = phone.replaceAll("+", "");
+    }
+
+    return phone;
+  }
+
+  Future<void> loginDirectly() async {
+    if (isLoading) return;
+
+    final rawPhone = phoneController.text.trim();
+
+    if (rawPhone.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("الرجاء إدخال رقم الجوال")));
       return;
     }
 
+    final phone = normalizePhone(rawPhone);
+
     setState(() => isLoading = true);
 
     try {
-      // 1. جلب خدمة المستخدم من المزود (Provider)
       final userService = ref.read(userServiceProvider);
 
-      // 2. التحقق من وجود المستخدم في قاعدة البيانات (Supabase)
       final user = await userService.getUserByPhone(phone);
 
-      // 3. تحديث رقم الجوال في الحالة العامة للتطبيق (AppState)
+      if (user == null) {
+        await userService.ensureUserExists(phone);
+      }
+
+      await AuthStorage().savePhone(phone);
+
       ref.read(appStateProvider.notifier).setUserPhone(phone);
 
       if (!mounted) return;
 
-      // ✅ التصحيح 1: التعامل مع user كـ Map واستخدام ['name'] بدلاً من .name
+      // 🔥 هنا التعديل المهم
       if (user != null &&
           user['name'] != null &&
           user['name'].toString().isNotEmpty) {
-        // إذا كان المستخدم موجوداً وبياناته مكتملة، نتوجه للرئيسية
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          MaterialPageRoute(
+            builder: (_) => const MainNavigation(initialIndex: 0),
+          ),
           (route) => false,
         );
       } else {
-        // ✅ التصحيح 2: تمرير رقم الجوال المطلوب (phone) لشاشة RegisterScreen
         Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => RegisterScreen(phone: phone)),
         );
       }
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint("LOGIN ERROR: $e");
+      debugPrint("STACK: $stack");
+
+      if (!mounted) return;
+
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text("حدث خطأ: ${e.toString()}")));
+      ).showSnackBar(const SnackBar(content: Text("حدث خطأ، حاول مرة أخرى")));
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -85,7 +110,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(
                 labelText: "رقم الجوال",
-                prefixText: "+966 ",
+                hintText: "05XXXXXXXX",
                 border: OutlineInputBorder(),
               ),
             ),

@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import '../models/product.dart';
 
 class CartService extends ChangeNotifier {
-  // استخدام الـ Singleton (اختياري مع Riverpod ولكن نتركه كما فضلته أنت)
+  // Singleton
   static final CartService _instance = CartService._internal();
+
+  // ✅ إضافة instance للوصول المباشر
+  static CartService get instance => _instance;
 
   factory CartService() {
     return _instance;
@@ -27,7 +30,6 @@ class CartService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ✅ تم تغيير الاسم من clear إلى clearCart ليطابق الاستدعاء في CartScreen
   void clearCart() {
     cartItems.clear();
     notifyListeners();

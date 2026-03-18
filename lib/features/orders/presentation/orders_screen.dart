@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -17,14 +18,12 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   final OrderService orderService = OrderService();
   List<OrderModel> orders = [];
   bool loading = true;
-  RealtimeChannel? ordersChannel; // ✅ جعلناه Nullable للأمان
+  RealtimeChannel? ordersChannel;
 
   @override
   void initState() {
     super.initState();
-    // تحميل الطلبات عند فتح الشاشة
     Future.microtask(() => loadOrders());
-    // تفعيل الاستماع اللحظي للتغييرات
     listenToOrderUpdates();
   }
 
@@ -33,10 +32,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     if (phone == null) return;
 
     ordersChannel = Supabase.instance.client
-        .channel('public:orders') // ✅ تسمية القناة بشكل أوضح
+        .channel('public:orders')
         .onPostgresChanges(
-          event: PostgresChangeEvent
-              .all, // ✅ الاستماع لكل الأحداث (إضافة، تعديل، حذف)
+          event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'orders',
           filter: PostgresChangeFilter(
@@ -45,7 +43,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             value: phone,
           ),
           callback: (payload) {
-            if (mounted) loadOrders(); // تحديث القائمة فور حدوث تغيير
+            if (mounted) loadOrders();
           },
         )
         .subscribe();
@@ -53,7 +51,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
   @override
   void dispose() {
-    // ✅ التأكد من إغلاق القناة عند الخروج من الشاشة لتوفير موارد السيرفر
     if (ordersChannel != null) {
       Supabase.instance.client.removeChannel(ordersChannel!);
     }
@@ -61,15 +58,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   Future<void> loadOrders() async {
-    final phone = ref.read(appStateProvider).userPhone;
-
-    if (phone == null) {
-      if (mounted) setState(() => loading = false);
-      return;
-    }
-
     try {
-      final data = await orderService.getOrdersByPhone(phone);
+      final data = await orderService.getOrdersByPhone();
+
       if (mounted) {
         setState(() {
           orders = data.map((o) => OrderModel.fromMap(o)).toList();
@@ -92,7 +83,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
       case "done":
         return Colors.green;
       case "canceled":
-        return Colors.red; // ✅ إضافة حالة الإلغاء
+        return Colors.red;
       default:
         return Colors.grey;
     }
@@ -120,7 +111,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text("طلباتي"), centerTitle: true),
       body: RefreshIndicator(
-        // ✅ إضافة ميزة "اسحب للتحديث"
         onRefresh: loadOrders,
         child: loading
             ? const Center(child: CircularProgressIndicator())
@@ -140,7 +130,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
   Widget _buildEmptyState() {
     return SingleChildScrollView(
-      // ليعمل RefreshIndicator
       physics: const AlwaysScrollableScrollPhysics(),
       child: Container(
         height: MediaQuery.of(context).size.height * 0.7,
@@ -192,20 +181,18 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
-                ...order.products
-                    .map(
-                      (p) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text("• ${p['name']}"),
-                            Text("${p['price']} ريال"),
-                          ],
-                        ),
-                      ),
-                    )
-                    .toList(),
+                ...order.products.map(
+                  (p) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text("• ${p['name']}"),
+                        Text("${p['price']} ريال"),
+                      ],
+                    ),
+                  ),
+                ),
                 const Divider(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,

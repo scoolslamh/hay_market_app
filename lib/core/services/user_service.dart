@@ -3,18 +3,33 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class UserService {
   final supabase = Supabase.instance.client;
 
-  /// التحقق من وجود المستخدم وجلب بياناته إن وجدت
+  /// 🔍 جلب المستخدم حسب رقم الجوال
   Future<Map<String, dynamic>?> getUserByPhone(String phone) async {
-    final data = await supabase
-        .from('users')
-        .select()
-        .eq('phone', phone)
-        .maybeSingle();
+    try {
+      final data = await supabase
+          .from('users')
+          .select()
+          .eq('phone', phone)
+          .maybeSingle();
 
-    return data; // سيعيد null إذا كان المستخدم جديداً
+      return data;
+    } catch (e) {
+      print("GetUser Error: $e");
+      return null;
+    }
   }
 
-  /// وظيفة حفظ أو تحديث بيانات المستخدم (الاسم، البريد، العنوان)
+  /// 🆕 إنشاء مستخدم جديد
+  Future<void> createUser(Map<String, dynamic> data) async {
+    try {
+      await supabase.from('users').insert(data);
+    } catch (e) {
+      print("CreateUser Error: $e");
+      rethrow;
+    }
+  }
+
+  /// 🔄 تحديث بيانات المستخدم
   Future<void> updateProfile({
     required String phone,
     required String name,
@@ -22,29 +37,46 @@ class UserService {
     String? address,
     Map<String, dynamic>? locationData,
   }) async {
-    // 1. تحديث الجدول الرئيسي للمستخدمين
-    await supabase.from("users").upsert({
-      "phone": phone,
-      "name": name,
-      "email": email,
-      "address": address,
-      "role": "customer",
-    }, onConflict: 'phone');
-
-    // 2. تحديث جدول العناوين إذا توفرت بيانات الموقع
-    if (locationData != null) {
-      await supabase.from("addresses").upsert({
+    try {
+      // تحديث جدول users
+      await supabase.from("users").upsert({
         "phone": phone,
-        "address_name": locationData['address'],
-        "lat": locationData['lat'],
-        "lng": locationData['lng'],
+        "name": name,
+        "email": email,
+        "address": address,
+        "role": "customer",
       }, onConflict: 'phone');
+
+      // تحديث العنوان
+      if (locationData != null) {
+        await supabase.from("addresses").upsert({
+          "phone": phone,
+          "address_name": locationData['address'],
+          "lat": locationData['lat'],
+          "lng": locationData['lng'],
+        }, onConflict: 'phone');
+      }
+    } catch (e) {
+      print("UpdateProfile Error: $e");
+      rethrow;
     }
   }
 
-  /// دالة بسيطة للتحقق من الوجود (اختياري)
+  /// ✅ التحقق من وجود المستخدم
   Future<bool> userExists(String phone) async {
     final data = await getUserByPhone(phone);
     return data != null;
+  }
+
+  /// 🔥 إنشاء المستخدم إذا لم يكن موجود (الأفضل استخدامه)
+  Future<void> ensureUserExists(String phone) async {
+    final existing = await getUserByPhone(phone);
+
+    if (existing == null) {
+      await createUser({
+        'phone': phone,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    }
   }
 }

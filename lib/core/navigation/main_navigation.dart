@@ -6,18 +6,21 @@ import '../../features/orders/presentation/orders_screen.dart';
 import '../../features/cart/presentation/cart_screen.dart';
 import '../../features/account/presentation/account_screen.dart';
 import '../state/providers.dart';
+import '../services/auth_storage.dart';
 
 class MainNavigation extends ConsumerStatefulWidget {
-  const MainNavigation({super.key});
+  final int initialIndex;
+
+  const MainNavigation({super.key, this.initialIndex = 0});
 
   @override
   ConsumerState<MainNavigation> createState() => _MainNavigationState();
 }
 
 class _MainNavigationState extends ConsumerState<MainNavigation> {
-  int currentIndex = 0;
+  late int currentIndex;
+  bool isLoading = true;
 
-  // قائمة الشاشات
   final List<Widget> screens = const [
     HomeScreen(),
     OrdersScreen(),
@@ -26,21 +29,60 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
   ];
 
   @override
-  Widget build(BuildContext context) {
-    // 🔥 مراقبة حالة السلة عبر Riverpod لضمان تحديث العداد فوراً
-    final cartService = ref.watch(cartServiceProvider);
+  void initState() {
+    super.initState();
+    currentIndex = widget.initialIndex;
 
-    // مراقبة حالة التطبيق (الحي والماركت) لضمان استجابة الواجهة
+    _loadSavedData(); // 🔥 استرجاع البيانات
+  }
+
+  /// 🔥 استرجاع الحي والماركت
+  Future<void> _loadSavedData() async {
+    final storage = AuthStorage();
+
+    final data = await storage.getUserSelection();
+
+    final marketId = data['marketId'];
+    final marketName = data['marketName'];
+
+    final neighborhoodId = data['neighborhoodId'];
+    final neighborhoodName = data['neighborhoodName'];
+
+    // ✅ الحل النهائي (تمرير قيمتين دائماً)
+    if (marketId != null) {
+      ref.read(appStateProvider.notifier).setMarket(marketId, marketName ?? "");
+    }
+
+    if (neighborhoodId != null) {
+      ref
+          .read(appStateProvider.notifier)
+          .setNeighborhood(neighborhoodId, neighborhoodName ?? "");
+    }
+
+    if (mounted) {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cartService = ref.watch(cartServiceProvider);
     final appState = ref.watch(appStateProvider);
 
+    /// ⏳ أثناء تحميل البيانات
+    if (isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     return Scaffold(
-      // استخدام IndexedStack يحافظ على حالة الشاشات (مثلاً مكان التوقف في القائمة)
       body: IndexedStack(index: currentIndex, children: screens),
 
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: currentIndex,
-        selectedItemColor: const Color(0xFF004D40), // لون دكان الحي المميز
+        selectedItemColor: const Color(0xFF004D40),
         unselectedItemColor: Colors.grey,
         onTap: (index) {
           setState(() {
@@ -64,7 +106,6 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
               clipBehavior: Clip.none,
               children: [
                 const Icon(Icons.shopping_cart_outlined),
-                // ✅ العداد الآن يقرأ من النسخة الموحدة للسلة
                 if (cartService.cartItems.isNotEmpty)
                   Positioned(
                     right: -6,
@@ -73,11 +114,8 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
                       padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
                         color: Colors.red,
-                        shape: BoxShape.circle, // شكل دائري أفضل
-                        border: Border.all(
-                          color: Colors.white,
-                          width: 1.5,
-                        ), // تحديد يبرز العداد
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.5),
                       ),
                       constraints: const BoxConstraints(
                         minWidth: 18,

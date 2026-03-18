@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'cart_service.dart';
+import 'auth_storage.dart';
 
 class OrderService extends ChangeNotifier {
   final SupabaseClient supabase = Supabase.instance.client;
@@ -20,19 +21,20 @@ class OrderService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// إنشاء طلب جديد
-  Future<void> createOrder({
-    required String phone,
-    required String marketId,
-  }) async {
-    // جلب نسخة السلة (بما أنها Singleton ستكون هي نفسها التي يراها المستخدم)
-    final cart = CartService();
+  /// 🧾 إنشاء طلب جديد
+  Future<void> createOrder({required String marketId}) async {
+    final cart = CartService.instance; // ✅ الحل هنا
 
     if (cart.cartItems.isEmpty) {
       throw Exception("السلة فارغة");
     }
 
-    /// تحويل المنتجات إلى قائمة خريطة (Map) لتخزينها كـ JSON في Supabase
+    final phone = await AuthStorage().getPhone();
+
+    if (phone == null) {
+      throw Exception("المستخدم غير مسجل");
+    }
+
     final productsJson = cart.cartItems
         .map((p) => {"id": p.id, "name": p.name, "price": p.price})
         .toList();
@@ -41,20 +43,18 @@ class OrderService extends ChangeNotifier {
       await supabase
           .from("orders")
           .insert({
-            "phone":
-                phone, // ✅ تأكد أن اسم العمود في الجدول هو phone وليس user_phone
+            "phone": phone,
             "market_id": marketId,
             "products": productsJson,
             "total": cart.total,
             "status": "new",
+            "created_at": DateTime.now().toIso8601String(),
           })
           .timeout(const Duration(seconds: 10));
 
-      /// زيادة عداد الطلبات المحلي
       _increase();
 
-      /// ✅ الإصلاح هنا: تم تغيير clear() إلى clearCart() ليتوافق مع ملف الخدمة الجديد
-      cart.clearCart();
+      cart.clearCart(); // ✅ الآن مضمون يفرغ السلة الصحيحة
     } on TimeoutException {
       throw Exception("انتهت مهلة الاتصال بالخادم");
     } catch (e) {
@@ -63,13 +63,17 @@ class OrderService extends ChangeNotifier {
     }
   }
 
-  /// جلب طلبات المستخدم بناءً على رقم الجوال
-  Future<List<Map<String, dynamic>>> getOrdersByPhone(String phone) async {
+  /// 📦 جلب الطلبات
+  Future<List<Map<String, dynamic>>> getOrdersByPhone() async {
     try {
+      final phone = await AuthStorage().getPhone();
+
+      if (phone == null) return [];
+
       final response = await supabase
           .from("orders")
           .select()
-          .eq("phone", phone) // ✅ تأكد من مطابقة اسم العمود
+          .eq("phone", phone)
           .order("created_at", ascending: false)
           .limit(50)
           .timeout(const Duration(seconds: 10));
