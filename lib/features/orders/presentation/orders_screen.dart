@@ -15,39 +15,37 @@ class OrdersScreen extends ConsumerStatefulWidget {
 
 class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   final OrderService orderService = OrderService();
-
   List<OrderModel> orders = [];
   bool loading = true;
-
-  late RealtimeChannel ordersChannel;
+  RealtimeChannel? ordersChannel; // ✅ جعلناه Nullable للأمان
 
   @override
   void initState() {
     super.initState();
-
+    // تحميل الطلبات عند فتح الشاشة
     Future.microtask(() => loadOrders());
-
+    // تفعيل الاستماع اللحظي للتغييرات
     listenToOrderUpdates();
   }
 
-  /// الاستماع لتحديثات الطلبات
   void listenToOrderUpdates() {
+    final phone = ref.read(appStateProvider).userPhone;
+    if (phone == null) return;
+
     ordersChannel = Supabase.instance.client
-        .channel('orders_changes')
+        .channel('public:orders') // ✅ تسمية القناة بشكل أوضح
         .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
+          event: PostgresChangeEvent
+              .all, // ✅ الاستماع لكل الأحداث (إضافة، تعديل، حذف)
           schema: 'public',
           table: 'orders',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'phone',
+            value: phone,
+          ),
           callback: (payload) {
-            loadOrders();
-          },
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'orders',
-          callback: (payload) {
-            loadOrders();
+            if (mounted) loadOrders(); // تحديث القائمة فور حدوث تغيير
           },
         )
         .subscribe();
@@ -55,7 +53,10 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
   @override
   void dispose() {
-    Supabase.instance.client.removeChannel(ordersChannel);
+    // ✅ التأكد من إغلاق القناة عند الخروج من الشاشة لتوفير موارد السيرفر
+    if (ordersChannel != null) {
+      Supabase.instance.client.removeChannel(ordersChannel!);
+    }
     super.dispose();
   }
 
@@ -63,19 +64,23 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     final phone = ref.read(appStateProvider).userPhone;
 
     if (phone == null) {
-      setState(() => loading = false);
+      if (mounted) setState(() => loading = false);
       return;
     }
 
-    final data = await orderService.getOrdersByPhone(phone);
-
-    setState(() {
-      orders = data.map((o) => OrderModel.fromMap(o)).toList();
-      loading = false;
-    });
+    try {
+      final data = await orderService.getOrdersByPhone(phone);
+      if (mounted) {
+        setState(() {
+          orders = data.map((o) => OrderModel.fromMap(o)).toList();
+          loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => loading = false);
+    }
   }
 
-  /// لون حالة الطلب
   Color getStatusColor(String status) {
     switch (status) {
       case "new":
@@ -86,22 +91,25 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         return Colors.purple;
       case "done":
         return Colors.green;
+      case "canceled":
+        return Colors.red; // ✅ إضافة حالة الإلغاء
       default:
         return Colors.grey;
     }
   }
 
-  /// نص حالة الطلب
   String getStatusText(String status) {
     switch (status) {
       case "new":
-        return "قيد المراجعة";
+        return "📦 قيد المراجعة";
       case "preparing":
-        return "جاري التجهيز";
+        return "👨‍🍳 جاري التجهيز";
       case "delivery":
-        return "جاري التوصيل";
+        return "🚚 جاري التوصيل";
       case "done":
-        return "تم التوصيل";
+        return "✅ تم التوصيل";
+      case "canceled":
+        return "❌ تم الإلغاء";
       default:
         return status;
     }
@@ -110,90 +118,111 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("طلباتي")),
+      appBar: AppBar(title: const Text("طلباتي"), centerTitle: true),
+      body: RefreshIndicator(
+        // ✅ إضافة ميزة "اسحب للتحديث"
+        onRefresh: loadOrders,
+        child: loading
+            ? const Center(child: CircularProgressIndicator())
+            : orders.isEmpty
+            ? _buildEmptyState()
+            : ListView.builder(
+                padding: const EdgeInsets.all(8),
+                itemCount: orders.length,
+                itemBuilder: (context, index) {
+                  final order = orders[index];
+                  return _buildOrderCard(order);
+                },
+              ),
+      ),
+    );
+  }
 
-      body: loading
-          ? const Center(child: CircularProgressIndicator())
-          : orders.isEmpty
-          ? const Center(child: Text("لا يوجد طلبات"))
-          : ListView.builder(
-              itemCount: orders.length,
-              itemBuilder: (context, index) {
-                final order = orders[index];
+  Widget _buildEmptyState() {
+    return SingleChildScrollView(
+      // ليعمل RefreshIndicator
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        alignment: Alignment.center,
+        child: const Text("لا توجد طلبات سابقة"),
+      ),
+    );
+  }
 
-                return Card(
-                  margin: const EdgeInsets.all(10),
-                  child: ExpansionTile(
-                    title: Text(
-                      "طلب رقم ${order.id.substring(0, 6)}",
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("المجموع: ${order.total} ريال"),
-                        const SizedBox(height: 5),
-
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: getStatusColor(
-                              order.status,
-                            ).withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            getStatusText(order.status),
-                            style: TextStyle(
-                              color: getStatusColor(order.status),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildOrderCard(OrderModel order) {
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ExpansionTile(
+        leading: Icon(
+          Icons.shopping_bag_outlined,
+          color: getStatusColor(order.status),
+        ),
+        title: Text(
+          "طلب #${order.id.substring(0, 8).toUpperCase()}",
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text("الإجمالي: ${order.total} ريال"),
+        trailing: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: getStatusColor(order.status).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            getStatusText(order.status),
+            style: TextStyle(
+              color: getStatusColor(order.status),
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Divider(),
+                const Text(
+                  "تفاصيل المنتجات:",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                ...order.products
+                    .map(
+                      (p) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              "المنتجات:",
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-
-                            const SizedBox(height: 5),
-
-                            ...order.products.map((p) {
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 2,
-                                ),
-                                child: Text(
-                                  "- ${p['name']} (${p['price']} ريال)",
-                                ),
-                              );
-                            }).toList(),
-
-                            const SizedBox(height: 10),
-
-                            Text(
-                              "التاريخ: ${order.createdAt.day}/${order.createdAt.month}/${order.createdAt.year}",
-                            ),
+                            Text("• ${p['name']}"),
+                            Text("${p['price']} ريال"),
                           ],
                         ),
                       ),
-                    ],
-                  ),
-                );
-              },
+                    )
+                    .toList(),
+                const Divider(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "التاريخ: ${order.createdAt.day}/${order.createdAt.month}/${order.createdAt.year}",
+                    ),
+                    Text(
+                      "الوقت: ${order.createdAt.hour}:${order.createdAt.minute}",
+                    ),
+                  ],
+                ),
+              ],
             ),
+          ),
+        ],
+      ),
     );
   }
 }

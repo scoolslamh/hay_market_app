@@ -25,14 +25,15 @@ class OrderService extends ChangeNotifier {
     required String phone,
     required String marketId,
   }) async {
+    // جلب نسخة السلة (بما أنها Singleton ستكون هي نفسها التي يراها المستخدم)
     final cart = CartService();
 
     if (cart.cartItems.isEmpty) {
       throw Exception("السلة فارغة");
     }
 
-    /// تحويل المنتجات إلى JSON
-    final products = cart.cartItems
+    /// تحويل المنتجات إلى قائمة خريطة (Map) لتخزينها كـ JSON في Supabase
+    final productsJson = cart.cartItems
         .map((p) => {"id": p.id, "name": p.name, "price": p.price})
         .toList();
 
@@ -40,19 +41,20 @@ class OrderService extends ChangeNotifier {
       await supabase
           .from("orders")
           .insert({
-            "user_phone": phone,
+            "phone":
+                phone, // ✅ تأكد أن اسم العمود في الجدول هو phone وليس user_phone
             "market_id": marketId,
-            "products": products,
+            "products": productsJson,
             "total": cart.total,
             "status": "new",
           })
           .timeout(const Duration(seconds: 10));
 
-      /// زيادة عداد الطلبات
+      /// زيادة عداد الطلبات المحلي
       _increase();
 
-      /// تفريغ السلة
-      cart.clear();
+      /// ✅ الإصلاح هنا: تم تغيير clear() إلى clearCart() ليتوافق مع ملف الخدمة الجديد
+      cart.clearCart();
     } on TimeoutException {
       throw Exception("انتهت مهلة الاتصال بالخادم");
     } catch (e) {
@@ -61,15 +63,15 @@ class OrderService extends ChangeNotifier {
     }
   }
 
-  /// جلب طلبات المستخدم
+  /// جلب طلبات المستخدم بناءً على رقم الجوال
   Future<List<Map<String, dynamic>>> getOrdersByPhone(String phone) async {
     try {
       final response = await supabase
           .from("orders")
           .select()
-          .eq("user_phone", phone)
+          .eq("phone", phone) // ✅ تأكد من مطابقة اسم العمود
           .order("created_at", ascending: false)
-          .limit(50) // تحسين الأداء
+          .limit(50)
           .timeout(const Duration(seconds: 10));
 
       return List<Map<String, dynamic>>.from(response);

@@ -17,12 +17,14 @@ class OrderModel {
 
   factory OrderModel.fromMap(Map<String, dynamic> map) {
     return OrderModel(
-      id: map['id'],
-      phone: map['user_phone'],
-      total: (map['total'] as num).toDouble(),
-      status: map['status'],
-      createdAt: DateTime.parse(map['created_at']),
-      products: map['products'] ?? [],
+      id: map['id'].toString(), // تحويل الـ ID لنص لضمان عدم حدوث خطأ
+      phone: map['phone'] ?? '', // ✅ تم التعديل من user_phone إلى phone
+      total: (map['total'] as num?)?.toDouble() ?? 0.0,
+      status: map['status'] ?? 'new',
+      createdAt: map['created_at'] != null
+          ? DateTime.parse(map['created_at'])
+          : DateTime.now(),
+      products: map['products'] as List? ?? [],
     );
   }
 }

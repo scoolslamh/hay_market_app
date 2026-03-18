@@ -1,119 +1,109 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/orders/presentation/orders_screen.dart';
 import '../../features/cart/presentation/cart_screen.dart';
 import '../../features/account/presentation/account_screen.dart';
-import '../services/cart_service.dart';
+import '../state/providers.dart';
 
-class MainNavigation extends StatefulWidget {
+class MainNavigation extends ConsumerStatefulWidget {
   const MainNavigation({super.key});
 
   @override
-  State<MainNavigation> createState() => _MainNavigationState();
+  ConsumerState<MainNavigation> createState() => _MainNavigationState();
 }
 
-class _MainNavigationState extends State<MainNavigation> {
+class _MainNavigationState extends ConsumerState<MainNavigation> {
   int currentIndex = 0;
 
-  final CartService cartService = CartService();
-
-  late final List<Widget> screens;
-
-  @override
-  void initState() {
-    super.initState();
-
-    screens = const [
-      HomeScreen(),
-      OrdersScreen(),
-      CartScreen(),
-      AccountScreen(),
-    ];
-  }
+  // قائمة الشاشات
+  final List<Widget> screens = const [
+    HomeScreen(),
+    OrdersScreen(),
+    CartScreen(),
+    AccountScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: cartService,
+    // 🔥 مراقبة حالة السلة عبر Riverpod لضمان تحديث العداد فوراً
+    final cartService = ref.watch(cartServiceProvider);
 
-      builder: (context, _) {
-        return Scaffold(
-          body: IndexedStack(index: currentIndex, children: screens),
+    // مراقبة حالة التطبيق (الحي والماركت) لضمان استجابة الواجهة
+    final appState = ref.watch(appStateProvider);
 
-          bottomNavigationBar: BottomNavigationBar(
-            type: BottomNavigationBarType.fixed,
-            currentIndex: currentIndex,
-            selectedItemColor: Colors.green,
-            unselectedItemColor: Colors.grey,
+    return Scaffold(
+      // استخدام IndexedStack يحافظ على حالة الشاشات (مثلاً مكان التوقف في القائمة)
+      body: IndexedStack(index: currentIndex, children: screens),
 
-            onTap: (index) {
-              setState(() {
-                currentIndex = index;
-              });
-            },
-
-            items: [
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.home),
-                label: "الرئيسية",
-              ),
-
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.receipt_long),
-                label: "الطلبات",
-              ),
-
-              BottomNavigationBarItem(
-                label: "السلة",
-
-                icon: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    const Icon(Icons.shopping_cart),
-
-                    if (cartService.count > 0)
-                      Positioned(
-                        right: -6,
-                        top: -6,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-
-                          constraints: const BoxConstraints(
-                            minWidth: 16,
-                            minHeight: 16,
-                          ),
-
-                          child: Text(
-                            cartService.count.toString(),
-
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.person),
-                label: "الحساب",
-              ),
-            ],
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: currentIndex,
+        selectedItemColor: const Color(0xFF004D40), // لون دكان الحي المميز
+        unselectedItemColor: Colors.grey,
+        onTap: (index) {
+          setState(() {
+            currentIndex = index;
+          });
+        },
+        items: [
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: "الرئيسية",
           ),
-        );
-      },
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.receipt_long_outlined),
+            activeIcon: Icon(Icons.receipt_long),
+            label: "الطلبات",
+          ),
+          BottomNavigationBarItem(
+            label: "السلة",
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.shopping_cart_outlined),
+                // ✅ العداد الآن يقرأ من النسخة الموحدة للسلة
+                if (cartService.cartItems.isNotEmpty)
+                  Positioned(
+                    right: -6,
+                    top: -6,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle, // شكل دائري أفضل
+                        border: Border.all(
+                          color: Colors.white,
+                          width: 1.5,
+                        ), // تحديد يبرز العداد
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 18,
+                        minHeight: 18,
+                      ),
+                      child: Text(
+                        cartService.cartItems.length.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: "الحساب",
+          ),
+        ],
+      ),
     );
   }
 }

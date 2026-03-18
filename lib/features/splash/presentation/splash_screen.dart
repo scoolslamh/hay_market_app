@@ -3,11 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/state/providers.dart';
-import '../../../core/services/auth_storage.dart';
-
 import '../../auth/presentation/login_screen.dart';
-import '../../welcome/presentation/welcome_screen.dart';
-import '../../../core/navigation/main_navigation.dart'; // ✅ مهم
+import '../../auth/presentation/register_screen.dart';
+import '../../location/presentation/neighborhood_screen.dart';
+import '../../../core/navigation/main_navigation.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -24,7 +23,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   @override
   void initState() {
     super.initState();
-
     controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -37,55 +35,69 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     controller.forward();
 
-    Timer(const Duration(seconds: 2), goNext);
+    // تأخير لمدة ثانيتين لعرض الشعار ثم بدء التحقق
+    Timer(const Duration(seconds: 2), _checkAuthAndNavigate);
   }
 
-  Future<void> goNext() async {
-    final storage = AuthStorage();
-
-    final phone = await storage.getPhone();
-    final selection = await storage.getUserSelection();
-
+  Future<void> _checkAuthAndNavigate() async {
     if (!mounted) return;
 
-    /// ❌ غير مسجل دخول
-    if (phone == null) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
+    // 1. جلب رقم الجوال من الحالة المحلية (AppState)
+    final phone = ref.read(appStateProvider).userPhone;
+
+    if (phone == null || phone.isEmpty) {
+      _navigateTo(const LoginScreen());
       return;
     }
 
-    /// ✅ حفظ رقم الجوال
-    ref.read(appStateProvider.notifier).setUserPhone(phone);
+    try {
+      final userService = ref.read(userServiceProvider);
+      final userData = await userService.getUserByPhone(phone);
 
-    final neighborhoodId = selection["neighborhoodId"];
-    final marketId = selection["marketId"];
+      if (!mounted) return;
 
-    final neighborhoodName = selection["neighborhoodName"];
-    final marketName = selection["marketName"];
+      // ✅ حالة: المستخدم موجود في قاعدة البيانات
+      if (userData != null && userData['name'] != null) {
+        // استخراج المعرفات (تأكد من مطابقة مسميات الأعمدة في Supabase)
+        final String? nId = userData['neighborhood_id']?.toString();
+        final String? mId = userData['market_id']?.toString();
 
-    /// 🔥 مستخدم مكتمل → دخول للرئيسية (مو الطلبات)
-    if (neighborhoodId != null && marketId != null) {
-      ref
-          .read(appStateProvider.notifier)
-          .setNeighborhood(neighborhoodId, neighborhoodName ?? "");
+        // استخراج الأسماء للعرض
+        final String nName =
+            userData['neighborhood_name']?.toString() ??
+            userData['neighborhood']?.toString() ??
+            "";
+        final String mName = userData['market_name']?.toString() ?? "";
 
-      ref.read(appStateProvider.notifier).setMarket(marketId, marketName ?? "");
+        // 🛑 التحقق الجوهري: هل لديه حي ومتجر مختاران؟
+        if (nId != null && nId.isNotEmpty && mId != null && mId.isNotEmpty) {
+          // تحديث الحالة المحلية فوراً قبل الانتقال
+          final notifier = ref.read(appStateProvider.notifier);
+          notifier.setNeighborhood(nId, nName);
+          notifier.setMarket(mId, mName);
 
-      /// ✅ هنا التعديل المهم
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainNavigation()),
-      );
-    } else {
-      /// 👇 المستخدم جديد أو غير مكتمل
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-      );
+          _navigateTo(const MainNavigation());
+        } else {
+          // مسجل بياناته لكنه لم يكمل اختيار الموقع/المتجر
+          _navigateTo(const NeighborhoodScreen());
+        }
+      } else {
+        // الرقم موجود محلياً لكن لا يوجد سجل في Supabase (مستخدم جديد)
+        _navigateTo(RegisterScreen(phone: phone));
+      }
+    } catch (e) {
+      debugPrint("Splash Error: $e");
+      // في حال خطأ الشبكة، نعود للأمان (شاشة تسجيل الدخول)
+      _navigateTo(const LoginScreen());
     }
+  }
+
+  void _navigateTo(Widget screen) {
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => screen),
+    );
   }
 
   @override
@@ -104,27 +116,28 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              /// شعار التطبيق
-              Image.asset("assets/logo.png", width: 140),
-
+              // ✅ تم إزالة كلمة const من هنا لأن errorBuilder دالة ديناميكية لا يمكن جعلها ثابتة
+              Image.asset(
+                "assets/logo.png",
+                width: 140,
+                errorBuilder: (context, error, stackTrace) {
+                  // ✅ تم تغيير المسمى من shopping_store إلى store لأن الأخير هو الصحيح في Material Icons
+                  return const Icon(Icons.store, size: 80, color: Colors.green);
+                },
+              ),
               const SizedBox(height: 20),
-
-              /// اسم التطبيق
               const Text(
                 "تموينات الحي",
                 style: TextStyle(
-                  fontSize: 22,
+                  fontSize: 26,
                   fontWeight: FontWeight.bold,
                   color: Colors.green,
                 ),
               ),
-
               const SizedBox(height: 8),
-
-              /// وصف التطبيق
               const Text(
                 "سوق حيك في هاتفك",
-                style: TextStyle(color: Colors.grey),
+                style: TextStyle(color: Colors.grey, fontSize: 16),
               ),
             ],
           ),

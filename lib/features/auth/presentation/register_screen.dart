@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../core/navigation/main_navigation.dart';
+import '../../../core/state/providers.dart';
+import '../../location/presentation/neighborhood_screen.dart';
 import 'map_picker_screen.dart';
 
-class RegisterScreen extends StatefulWidget {
+class RegisterScreen extends ConsumerStatefulWidget {
   final String phone;
   const RegisterScreen({super.key, required this.phone});
 
   @override
-  State<RegisterScreen> createState() => _RegisterScreenState();
+  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen> {
+class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final nameController = TextEditingController();
   final emailController = TextEditingController();
@@ -20,8 +22,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final supabase = Supabase.instance.client;
   bool _isLoading = false;
 
-  // متغير لحفظ بيانات الموقع الدقيقة (lat, lng, address) القادمة من الخريطة
   Map<String, dynamic>? _selectedLocationData;
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    emailController.dispose();
+    addressController.dispose();
+    super.dispose();
+  }
 
   Future<void> saveUser() async {
     if (!_formKey.currentState!.validate()) return;
@@ -29,35 +38,47 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. الحصول على هوية المستخدم الحالي (User ID)
-      final user = supabase.auth.currentUser;
-      if (user == null) throw "لم يتم العثور على جلسة مستخدم نشطة";
+      // 1. حفظ بيانات المستخدم في جدول users وجلب الـ 'id' المولد تلقائياً
+      // نستخدم .select('id').single() للحصول على المعرف فور الحفظ
+      final userResponse = await supabase
+          .from("users")
+          .upsert({
+            "phone": widget.phone,
+            "name": nameController.text.trim(),
+            "email": emailController.text.trim(),
+            "address": addressController.text,
+            "role": "customer",
+          }, onConflict: 'phone')
+          .select('id')
+          .single();
 
-      // 2. إدخال البيانات في جدول users (البيانات الشخصية)
-      await supabase.from("users").insert({
-        "id": user.id, // نستخدم الـ ID الخاص بـ Auth
-        "phone": widget.phone,
-        "name": nameController.text,
-        "email": emailController.text,
-        "address": addressController.text,
-        "role": "customer",
-      });
+      final String generatedUserId = userResponse['id'];
 
-      // 3. إدخال الموقع الدقيق في جدول addresses (موقع التوصيل)
+      // 2. إدخال الموقع الدقيق في جدول addresses مع ربطه بـ user_id الصحيح
       if (_selectedLocationData != null) {
-        await supabase.from("addresses").insert({
-          "user_id": user.id,
+        await supabase.from("addresses").upsert({
+          "user_id": generatedUserId, // ✅ الربط الصحيح بالمعرف
+          "phone": widget.phone, // الاحتفاظ بالرقم كمرجع إضافي
           "address_name": _selectedLocationData!['address'],
           "lat": _selectedLocationData!['lat'],
           "lng": _selectedLocationData!['lng'],
-        });
+        }, onConflict: 'phone');
       }
+
+      // 3. تحديث حالة التطبيق المحلية
+      ref.read(appStateProvider.notifier).setUserPhone(widget.phone);
 
       if (!mounted) return;
 
-      Navigator.pushReplacement(
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("تم حفظ بياناتك بنجاح، اختر حيك الآن")),
+      );
+
+      // 4. التوجه لاختيار الحي
+      Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const MainNavigation()),
+        MaterialPageRoute(builder: (_) => const NeighborhoodScreen()),
+        (route) => false,
       );
     } catch (e) {
       ScaffoldMessenger.of(
@@ -76,9 +97,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (result != null && result is Map<String, dynamic>) {
       setState(() {
-        _selectedLocationData =
-            result; // حفظ البيانات كاملة (الإحداثيات + النص)
-        addressController.text = result['address']; // عرض النص فقط للمستخدم
+        _selectedLocationData = result;
+        addressController.text = result['address'];
       });
     }
   }
@@ -94,9 +114,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 20),
-
-              // حقل الاسم
+              const SizedBox(height: 10),
               TextFormField(
                 controller: nameController,
                 decoration: InputDecoration(
@@ -110,10 +128,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ? "يرجى إدخال الاسم"
                     : null,
               ),
-
               const SizedBox(height: 16),
-
-              // حقل البريد الإلكتروني
               TextFormField(
                 controller: emailController,
                 keyboardType: TextInputType.emailAddress,
@@ -134,10 +149,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   return null;
                 },
               ),
-
               const SizedBox(height: 16),
-
-              // حقل العنوان
               TextFormField(
                 controller: addressController,
                 readOnly: true,
@@ -154,10 +166,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ? "يرجى تحديد الموقع من الخريطة"
                     : null,
               ),
-
               const SizedBox(height: 12),
-
-              // زر اختيار الموقع
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.all(12),
@@ -169,10 +178,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 label: const Text("اختيار الموقع من الخريطة"),
                 onPressed: pickLocation,
               ),
-
               const SizedBox(height: 40),
-
-              // زر الحفظ
               _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : ElevatedButton(
@@ -186,7 +192,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       onPressed: saveUser,
                       child: const Text(
-                        "حفظ وإكمال التسجيل",
+                        "حفظ واختيار الحي",
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

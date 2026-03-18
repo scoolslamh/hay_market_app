@@ -16,6 +16,7 @@ class OtpScreen extends ConsumerStatefulWidget {
 
 class _OtpScreenState extends ConsumerState<OtpScreen> {
   final otpController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -33,51 +34,72 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       return;
     }
 
-    /// قراءة رقم الجوال
-    final phone = ref.read(appStateProvider).userPhone;
+    final originalPhone = ref.read(appStateProvider).userPhone;
 
-    if (phone == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("حدث خطأ في تسجيل الدخول")));
+    if (originalPhone == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("حدث خطأ: رقم الهاتف غير موجود")),
+      );
       return;
     }
 
+    // --- التعديل الجوهري للوضع التجريبي ---
+    // سوبابيس في خانة Test Phone Numbers يطلب الرقم "صافي" بدون +
+    final cleanPhoneForTest = originalPhone.replaceAll('+', '').trim();
+
     final supabase = Supabase.instance.client;
+    setState(() => _isLoading = true);
 
     try {
-      /// البحث عن المستخدم
-      final user = await supabase
-          .from("users")
-          .select()
-          .eq("phone", phone)
-          .maybeSingle();
+      final AuthResponse response = await supabase.auth.verifyOTP(
+        phone: cleanPhoneForTest, // نرسل الرقم بدون زائد ليطابق الإعدادات
+        token: otp,
+        type: OtpType.sms,
+      );
 
-      /// حفظ تسجيل الدخول في الجهاز
-      final storage = AuthStorage();
-      await storage.savePhone(phone);
+      if (response.session != null) {
+        // البحث عن بيانات المستخدم
+        final userData = await supabase
+            .from("users")
+            .select()
+            .eq("phone", originalPhone)
+            .maybeSingle();
 
-      if (!mounted) return;
+        final storage = AuthStorage();
+        await storage.savePhone(originalPhone);
 
-      /// مستخدم جديد
-      if (user == null) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => RegisterScreen(phone: phone)),
-        );
+        if (!mounted) return;
+
+        if (userData == null) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => RegisterScreen(phone: originalPhone),
+            ),
+          );
+        } else {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+            (route) => false,
+          );
+        }
       }
-      /// مستخدم موجود
-      else {
-        Navigator.pushAndRemoveUntil(
+    } on AuthException catch (e) {
+      if (mounted) {
+        // إذا فشل بالرقم الصافي، نحاول مرة أخيرة بالرقم الأصلي (احتياطاً)
+        ScaffoldMessenger.of(
           context,
-          MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-          (route) => false,
-        );
+        ).showSnackBar(SnackBar(content: Text("خطأ: ${e.message}")));
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("حدث خطأ: $e")));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("حدث خطأ غير متوقع")));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -86,42 +108,50 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     final phone = ref.watch(appStateProvider).userPhone;
 
     return Scaffold(
-      appBar: AppBar(title: const Text("رمز التحقق")),
+      appBar: AppBar(title: const Text("رمز التحقق"), centerTitle: true),
       body: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              "تم إرسال رمز التحقق إلى:",
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-
-            const SizedBox(height: 8),
-
+            const Icon(Icons.security, size: 80, color: Color(0xFF004D40)),
+            const SizedBox(height: 24),
+            const Text("أدخل الرمز التجريبي المرسل إلى:"),
             Text(
               phone ?? "",
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-
-            const SizedBox(height: 30),
-
+            const SizedBox(height: 40),
             TextField(
               controller: otpController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "رمز التحقق",
-                border: OutlineInputBorder(),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 28, letterSpacing: 10),
+              decoration: InputDecoration(
+                hintText: "000000",
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
               ),
             ),
-
-            const SizedBox(height: 20),
-
+            const SizedBox(height: 30),
             SizedBox(
               width: double.infinity,
+              height: 55,
               child: ElevatedButton(
-                onPressed: verifyOtp,
-                child: const Text("تأكيد"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF004D40),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                ),
+                onPressed: _isLoading ? null : verifyOtp,
+                child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text(
+                        "تأكيد الرمز",
+                        style: TextStyle(color: Colors.white),
+                      ),
               ),
             ),
           ],
