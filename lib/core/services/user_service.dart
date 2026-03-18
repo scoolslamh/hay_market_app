@@ -1,20 +1,28 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class UserService {
-  final supabase = Supabase.instance.client;
+  final SupabaseClient supabase;
+
+  UserService({required this.supabase});
 
   /// 🔍 جلب المستخدم حسب رقم الجوال
   Future<Map<String, dynamic>?> getUserByPhone(String phone) async {
     try {
+      if (phone.isEmpty) {
+        throw Exception("رقم الجوال غير صالح");
+      }
+
       final data = await supabase
           .from('users')
           .select()
           .eq('phone', phone)
+          .limit(1)
           .maybeSingle();
 
       return data;
     } catch (e) {
-      print("GetUser Error: $e");
+      debugPrint("GetUser Error: $e");
       return null;
     }
   }
@@ -24,7 +32,7 @@ class UserService {
     try {
       await supabase.from('users').insert(data);
     } catch (e) {
-      print("CreateUser Error: $e");
+      debugPrint("CreateUser Error: $e");
       rethrow;
     }
   }
@@ -38,7 +46,6 @@ class UserService {
     Map<String, dynamic>? locationData,
   }) async {
     try {
-      // تحديث جدول users
       await supabase.from("users").upsert({
         "phone": phone,
         "name": name,
@@ -47,7 +54,6 @@ class UserService {
         "role": "customer",
       }, onConflict: 'phone');
 
-      // تحديث العنوان
       if (locationData != null) {
         await supabase.from("addresses").upsert({
           "phone": phone,
@@ -57,7 +63,7 @@ class UserService {
         }, onConflict: 'phone');
       }
     } catch (e) {
-      print("UpdateProfile Error: $e");
+      debugPrint("UpdateProfile Error: $e");
       rethrow;
     }
   }
@@ -68,7 +74,7 @@ class UserService {
     return data != null;
   }
 
-  /// 🔥 إنشاء المستخدم إذا لم يكن موجود (الأفضل استخدامه)
+  /// 🔥 إنشاء المستخدم إذا لم يكن موجود
   Future<void> ensureUserExists(String phone) async {
     final existing = await getUserByPhone(phone);
 

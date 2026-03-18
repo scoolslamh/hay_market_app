@@ -1,19 +1,33 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'app_state.dart';
 import 'app_state_notifier.dart';
 import '../services/user_service.dart';
-import '../services/cart_service.dart'; // ✅ تأكد من إضافة هذا الاستيراد
+import '../services/cart_service.dart';
 
-// 1. مزود خدمة المستخدم
-final userServiceProvider = Provider((ref) => UserService());
+/// 🔹 Supabase Provider
+final supabaseProvider = Provider<SupabaseClient>((ref) {
+  return Supabase.instance.client;
+});
 
-// 2. مزود حالة التطبيق (رقم الهاتف، الحي، المتجر)
+/// 🔹 User Service Provider
+final userServiceProvider = Provider<UserService>((ref) {
+  final supabase = ref.read(supabaseProvider);
+
+  return UserService(supabase: supabase);
+});
+
+/// 🔹 App State Provider
 final appStateProvider = StateNotifierProvider<AppStateNotifier, AppState>((
   ref,
 ) {
-  return AppStateNotifier();
+  final supabase = ref.read(supabaseProvider);
+
+  return AppStateNotifier(supabase: supabase);
 });
 
-// 3. ✅ مزود السلة (هذا هو السطر الناقص الذي يسبب الخطأ في شاشة السلة)
-// استخدمنا ChangeNotifierProvider لأن CartService يستخدم notifyListeners()
-final cartServiceProvider = ChangeNotifierProvider((ref) => CartService());
+/// 🔹 Cart Provider
+final cartServiceProvider = ChangeNotifierProvider<CartService>((ref) {
+  return CartService();
+});

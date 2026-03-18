@@ -1,5 +1,3 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 class AppState {
   final String? userPhone;
 
@@ -9,12 +7,20 @@ class AppState {
   final String? neighborhoodId;
   final String? neighborhoodName;
 
+  /// 🔥 جديد (حل مشكلة الشاشة الفارغة)
+  final List<dynamic> products;
+
+  /// 🔥 حالة التحميل
+  final bool isLoading;
+
   AppState({
     this.userPhone,
     this.marketId,
     this.marketName,
     this.neighborhoodId,
     this.neighborhoodName,
+    this.products = const [],
+    this.isLoading = false,
   });
 
   AppState copyWith({
@@ -23,6 +29,8 @@ class AppState {
     String? marketName,
     String? neighborhoodId,
     String? neighborhoodName,
+    List<dynamic>? products,
+    bool? isLoading,
   }) {
     return AppState(
       userPhone: userPhone ?? this.userPhone,
@@ -30,6 +38,8 @@ class AppState {
       marketName: marketName ?? this.marketName,
       neighborhoodId: neighborhoodId ?? this.neighborhoodId,
       neighborhoodName: neighborhoodName ?? this.neighborhoodName,
+      products: products ?? this.products,
+      isLoading: isLoading ?? this.isLoading,
     );
   }
 }
