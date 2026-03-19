@@ -8,6 +8,7 @@ import '../../auth/presentation/login_screen.dart';
 import '../../auth/presentation/register_screen.dart';
 import '../../location/presentation/neighborhood_screen.dart';
 import '../../../core/navigation/main_navigation.dart';
+import '../../merchant/presentation/merchant_home_screen.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -63,7 +64,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       /// 🔥 3. جلب بيانات المستخدم
       final userService = ref.read(userServiceProvider);
       final userData = await userService.getUserByPhone(phone);
-
+      final role = userData?['role'];
       if (!mounted) return;
 
       /// 🔥 4. الحصول على notifier
@@ -73,7 +74,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       notifier.setUserPhone(phone);
 
       /// ✅ المستخدم موجود
-      if (userData != null && userData['name'] != null) {
+      if (userData != null) {
+        final role = userData['role'];
+
+        /// 🔥 إذا كان تاجر
+        if (role == 'merchant') {
+          _navigateTo(const MerchantHomeScreen());
+          return;
+        }
         final String? nId = userData['neighborhood_id']?.toString();
         final String? mId = userData['market_id']?.toString();
 

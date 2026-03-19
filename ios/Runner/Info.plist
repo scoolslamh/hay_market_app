@@ -82,6 +82,8 @@
         <key>NSPhotoLibraryUsageDescription</key>
         <string>نحتاج الوصول للصور لاختيار صور العروض</string>
         <key>UIStatusBarHidden</key>
+        <key>NSPhotoLibraryUsageDescription</key>
+         <string>نحتاج الوصول للصور لاختيار صورة المنتج</string>
         <false/>
     </dict>
 </plist>
