@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart'; // ✅ جديد
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'cart_service.dart';
 import 'auth_storage.dart';
 import '../state/providers.dart';
@@ -23,7 +24,7 @@ class OrderService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 🔥 جلب آخر عنوان
+  /// 🔥 جلب آخر عنوان (مربوط بـ user_id)
   Future<Map<String, dynamic>?> _getLatestAddress() async {
     final user = supabase.auth.currentUser;
     if (user == null) return null;
@@ -37,11 +38,8 @@ class OrderService extends ChangeNotifier {
         .maybeSingle();
   }
 
-  /// 🧾 إنشاء طلب جديد (تم تطويرها بشكل صحيح)
-  Future<void> createOrder({
-    required String marketId,
-    required WidgetRef ref, // ✅ مهم جدًا
-  }) async {
+  /// 🧾 إنشاء طلب جديد (نسخة احترافية)
+  Future<void> createOrder({required WidgetRef ref}) async {
     final cart = CartService.instance;
 
     if (cart.cartItems.isEmpty) {
@@ -54,8 +52,12 @@ class OrderService extends ChangeNotifier {
       throw Exception("المستخدم غير مسجل");
     }
 
-    /// ✅ جلب الحالة الصحيحة من Riverpod
+    /// 🔥 المصدر الوحيد للحالة
     final state = ref.read(appStateProvider);
+
+    if (state.marketId == null) {
+      throw Exception("لم يتم تحديد متجر");
+    }
 
     /// 🔥 جلب العنوان
     final addressData = await _getLatestAddress();
@@ -73,11 +75,13 @@ class OrderService extends ChangeNotifier {
           .from("orders")
           .insert({
             "phone": phone,
-            "market_id": marketId,
 
-            /// 🔥 البيانات الجديدة (تعمل الآن بشكل صحيح)
-            "neighborhood": state.neighborhoodName,
+            /// 🔥 الربط الأساسي
+            "market_id": state.marketId,
+
+            /// 🔥 بيانات العرض
             "market": state.marketName,
+            "neighborhood": state.neighborhoodName,
             "address": address,
             "notes": notes,
 
@@ -89,7 +93,6 @@ class OrderService extends ChangeNotifier {
           .timeout(const Duration(seconds: 10));
 
       _increase();
-
       cart.clearCart();
     } on TimeoutException {
       throw Exception("انتهت مهلة الاتصال بالخادم");
@@ -99,7 +102,7 @@ class OrderService extends ChangeNotifier {
     }
   }
 
-  /// 📦 جلب الطلبات
+  /// 📦 جلب الطلبات للمستخدم
   Future<List<Map<String, dynamic>>> getOrdersByPhone() async {
     try {
       final phone = await AuthStorage().getPhone();
