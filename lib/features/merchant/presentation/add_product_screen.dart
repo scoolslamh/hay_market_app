@@ -68,7 +68,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
       final fileName = "product_${DateTime.now().millisecondsSinceEpoch}.jpg";
 
       /// 📂 تنظيم المسار
-      final path = "products/${widget.marketId}/$fileName";
+      final path = "${widget.marketId}/$fileName";
 
       await supabase.storage
           .from('products')
