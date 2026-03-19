@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/auth_storage.dart';
 import 'add_product_screen.dart';
+import 'order_details_screen.dart';
 
 class MerchantProductsScreen extends StatefulWidget {
   const MerchantProductsScreen({super.key});
@@ -151,7 +152,18 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
                                 fit: BoxFit.cover,
                               ),
                             )
-                          : const Icon(Icons.image, size: 40),
+                          : Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[200],
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.image,
+                                color: Colors.grey,
+                              ),
+                            ),
 
                       /// 📝 الاسم
                       title: Text(

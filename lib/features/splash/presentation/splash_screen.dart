@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/state/providers.dart';
+import '../../../core/services/auth_storage.dart';
 import '../../auth/presentation/login_screen.dart';
 import '../../auth/presentation/register_screen.dart';
 import '../../location/presentation/neighborhood_screen.dart';
@@ -42,71 +43,76 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Future<void> _checkAuthAndNavigate() async {
+    print("🔥 SPLASH STARTED 🔥");
+
     if (!mounted) return;
 
     try {
-      /// 🔥 1. التحقق من الجلسة (Auto Login)
-      final user = Supabase.instance.client.auth.currentUser;
+      /// 📱 1. جلب رقم الجوال
+      final phone = await AuthStorage().getPhone();
 
-      if (user == null) {
+      print("PHONE: $phone");
+
+      if (phone == null || phone.isEmpty) {
         _navigateTo(const LoginScreen());
         return;
       }
 
-      /// 🔥 2. استخراج رقم الجوال
-      final phone = user.phone ?? user.userMetadata?['phone'];
+      /// 🔥🔥🔥 2. التحقق من التاجر أولاً (الأهم)
+      final marketCheck = await Supabase.instance.client
+          .from('markets')
+          .select()
+          .eq('owner_phone', phone);
 
-      if (phone == null || phone.toString().isEmpty) {
-        _navigateTo(const LoginScreen());
+      print("MARKET CHECK: $marketCheck");
+
+      /// ✅ إذا كان تاجر → مباشرة لوحة التاجر
+      if (marketCheck.isNotEmpty) {
+        _navigateTo(const MerchantHomeScreen());
         return;
       }
 
-      /// 🔥 3. جلب بيانات المستخدم
-      final userService = ref.read(userServiceProvider);
-      final userData = await userService.getUserByPhone(phone);
-      final role = userData?['role'];
+      /// 👤 3. التحقق من المستخدم (عميل)
+      final userData = await Supabase.instance.client
+          .from('users')
+          .select()
+          .eq('phone', phone)
+          .maybeSingle();
+
+      print("USER DATA: $userData");
+
       if (!mounted) return;
 
-      /// 🔥 4. الحصول على notifier
+      /// 💾 حفظ الرقم في AppState
       final notifier = ref.read(appStateProvider.notifier);
-
-      /// ✅ حفظ رقم المستخدم (مهم جدًا)
       notifier.setUserPhone(phone);
 
-      /// ✅ المستخدم موجود
-      if (userData != null) {
-        final role = userData['role'];
-
-        /// 🔥 إذا كان تاجر
-        if (role == 'merchant') {
-          _navigateTo(const MerchantHomeScreen());
-          return;
-        }
-        final String? nId = userData['neighborhood_id']?.toString();
-        final String? mId = userData['market_id']?.toString();
-
-        final String nName = userData['neighborhood_name']?.toString() ?? "";
-        final String mName = userData['market_name']?.toString() ?? "";
-
-        /// 🔥 5. التحقق من اختيار الحي والمتجر
-        if (nId != null && nId.isNotEmpty && mId != null && mId.isNotEmpty) {
-          notifier.setNeighborhood(nId, nName);
-          notifier.setMarket(mId, mName);
-
-          /// 🔥🔥🔥 تحميل المنتجات
-          await notifier.loadInitialData();
-
-          _navigateTo(const MainNavigation());
-        } else {
-          _navigateTo(const NeighborhoodScreen());
-        }
-      } else {
-        /// مستخدم جديد
+      /// ❗ مستخدم جديد
+      if (userData == null) {
         _navigateTo(RegisterScreen(phone: phone));
+        return;
+      }
+
+      /// 📍 بيانات العميل
+      final String? nId = userData['neighborhood_id']?.toString();
+      final String? mId = userData['market_id']?.toString();
+
+      final String nName = userData['neighborhood_name']?.toString() ?? "";
+      final String mName = userData['market_name']?.toString() ?? "";
+
+      /// ✅ إذا مكتمل
+      if (nId != null && nId.isNotEmpty && mId != null && mId.isNotEmpty) {
+        notifier.setNeighborhood(nId, nName);
+        notifier.setMarket(mId, mName);
+
+        await notifier.loadInitialData();
+
+        _navigateTo(const MainNavigation());
+      } else {
+        _navigateTo(const NeighborhoodScreen());
       }
     } catch (e) {
       debugPrint("Splash Error: $e");
-
       _navigateTo(const LoginScreen());
     }
   }
