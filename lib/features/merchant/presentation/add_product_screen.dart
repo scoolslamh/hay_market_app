@@ -29,7 +29,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
   void initState() {
     super.initState();
 
-    /// 🔥 في حالة التعديل
     if (widget.product != null) {
       nameController.text = widget.product!['name'] ?? "";
       priceController.text = widget.product!['price']?.toString() ?? "";
@@ -37,7 +36,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     }
   }
 
-  /// 📸 اختيار صورة مع ضغط
+  /// 📸 اختيار صورة
   Future<void> pickImage() async {
     try {
       final picked = await ImagePicker().pickImage(
@@ -56,43 +55,34 @@ class _AddProductScreenState extends State<AddProductScreen> {
     }
   }
 
-  /// ☁️ رفع الصورة بشكل احترافي
+  /// ☁️ رفع الصورة
   Future<String?> uploadImage() async {
     try {
       if (imageFile == null) return imageUrl;
 
-      setState(() {
-        uploadProgress = 0.2;
-      });
+      setState(() => uploadProgress = 0.2);
 
       final fileName = "product_${DateTime.now().millisecondsSinceEpoch}.jpg";
 
-      /// 📂 تنظيم المسار
       final path = "${widget.marketId}/$fileName";
 
-      await supabase.storage
-          .from('products')
-          .upload(
-            path,
-            imageFile!,
-            fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
-          );
+      await supabase.storage.from('products').upload(path, imageFile!);
 
-      setState(() {
-        uploadProgress = 0.9;
-      });
+      setState(() => uploadProgress = 0.9);
 
       final publicUrl = supabase.storage.from('products').getPublicUrl(path);
 
+      print("✅ IMAGE UPLOADED: $publicUrl");
+
       return publicUrl;
     } catch (e) {
-      debugPrint("Upload error: $e");
+      debugPrint("🔥 UPLOAD ERROR: $e");
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text("فشل رفع الصورة")));
+      ).showSnackBar(SnackBar(content: Text("خطأ رفع الصورة: $e")));
 
-      return imageUrl;
+      return null;
     }
   }
 
@@ -101,7 +91,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
     final name = nameController.text.trim();
     final price = double.tryParse(priceController.text.trim());
 
-    /// 🔒 تحقق من المدخلات
     if (name.isEmpty || price == null) {
       ScaffoldMessenger.of(
         context,
@@ -115,22 +104,26 @@ class _AddProductScreenState extends State<AddProductScreen> {
         uploadProgress = 0.1;
       });
 
+      print("📦 MARKET ID: ${widget.marketId}");
+
       final uploadedImage = await uploadImage();
 
+      print("🖼️ IMAGE URL: $uploadedImage");
+
+      /// 🔥 مهم: لا نخليها null
+      final imageToSave = uploadedImage ?? imageUrl ?? "";
+
       if (widget.product == null) {
-        /// ➕ إضافة
         await supabase.from('products').insert({
           "name": name,
           "price": price,
           "market_id": widget.marketId,
-          "image_url": uploadedImage,
-          "created_at": DateTime.now().toIso8601String(),
+          "image_url": imageToSave,
         });
       } else {
-        /// ✏️ تعديل
         await supabase
             .from('products')
-            .update({"name": name, "price": price, "image_url": uploadedImage})
+            .update({"name": name, "price": price, "image_url": imageToSave})
             .eq('id', widget.product!['id']);
       }
 
@@ -138,11 +131,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
       Navigator.pop(context);
     } catch (e) {
-      debugPrint("Save product error: $e");
+      debugPrint("🔥 SAVE ERROR: $e");
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text("حدث خطأ أثناء الحفظ")));
+      ).showSnackBar(SnackBar(content: Text("خطأ: $e")));
     } finally {
       setState(() {
         isLoading = false;
@@ -168,7 +161,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         padding: const EdgeInsets.all(20),
         child: ListView(
           children: [
-            /// 🖼️ الصورة مع Overlay احترافي
+            /// 🖼️ الصورة
             GestureDetector(
               onTap: isLoading ? null : pickImage,
               child: Stack(
@@ -191,7 +184,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     ),
                   ),
 
-                  /// 🔄 Progress Overlay
                   if (isLoading)
                     Container(
                       height: 160,
@@ -212,7 +204,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
             const SizedBox(height: 20),
 
-            /// 📝 الاسم
             TextField(
               controller: nameController,
               decoration: const InputDecoration(
@@ -223,7 +214,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
             const SizedBox(height: 15),
 
-            /// 💰 السعر
             TextField(
               controller: priceController,
               keyboardType: TextInputType.number,
@@ -235,12 +225,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
             const SizedBox(height: 30),
 
-            /// 🚀 زر الحفظ
             ElevatedButton(
               onPressed: isLoading ? null : saveProduct,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 15),
-              ),
               child: isLoading
                   ? const CircularProgressIndicator(color: Colors.white)
                   : Text(isEdit ? "تحديث المنتج" : "إضافة المنتج"),
