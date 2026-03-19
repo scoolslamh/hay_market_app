@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'; // ✅ جديد
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'cart_service.dart';
 import 'auth_storage.dart';
+import '../state/providers.dart';
 
 class OrderService extends ChangeNotifier {
   final SupabaseClient supabase = Supabase.instance.client;
@@ -21,9 +23,26 @@ class OrderService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 🧾 إنشاء طلب جديد
-  Future<void> createOrder({required String marketId}) async {
-    final cart = CartService.instance; // ✅ الحل هنا
+  /// 🔥 جلب آخر عنوان
+  Future<Map<String, dynamic>?> _getLatestAddress() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return null;
+
+    return await supabase
+        .from('addresses')
+        .select()
+        .eq('user_id', user.id)
+        .order('created_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+  }
+
+  /// 🧾 إنشاء طلب جديد (تم تطويرها بشكل صحيح)
+  Future<void> createOrder({
+    required String marketId,
+    required WidgetRef ref, // ✅ مهم جدًا
+  }) async {
+    final cart = CartService.instance;
 
     if (cart.cartItems.isEmpty) {
       throw Exception("السلة فارغة");
@@ -35,6 +54,16 @@ class OrderService extends ChangeNotifier {
       throw Exception("المستخدم غير مسجل");
     }
 
+    /// ✅ جلب الحالة الصحيحة من Riverpod
+    final state = ref.read(appStateProvider);
+
+    /// 🔥 جلب العنوان
+    final addressData = await _getLatestAddress();
+
+    final address = addressData?['address_name'] ?? "";
+    final notes = addressData?['notes'] ?? "";
+
+    /// 🛒 المنتجات
     final productsJson = cart.cartItems
         .map((p) => {"id": p.id, "name": p.name, "price": p.price})
         .toList();
@@ -45,6 +74,13 @@ class OrderService extends ChangeNotifier {
           .insert({
             "phone": phone,
             "market_id": marketId,
+
+            /// 🔥 البيانات الجديدة (تعمل الآن بشكل صحيح)
+            "neighborhood": state.neighborhoodName,
+            "market": state.marketName,
+            "address": address,
+            "notes": notes,
+
             "products": productsJson,
             "total": cart.total,
             "status": "new",
@@ -54,7 +90,7 @@ class OrderService extends ChangeNotifier {
 
       _increase();
 
-      cart.clearCart(); // ✅ الآن مضمون يفرغ السلة الصحيحة
+      cart.clearCart();
     } on TimeoutException {
       throw Exception("انتهت مهلة الاتصال بالخادم");
     } catch (e) {

@@ -64,7 +64,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               const SizedBox(height: 40),
 
               const Text(
-                "مرحباً بك 👋",
+                "مرحباً ألف 👋",
                 style: TextStyle(
                   fontSize: 30,
                   fontWeight: FontWeight.bold,
@@ -115,7 +115,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               const SizedBox(height: 20),
 
               const Text(
-                "ابدأ التسوق من متاجر حيّك بسهولة",
+                "ابدأ التسوق من متاجر حارتك بسهولة",
                 style: TextStyle(color: Colors.grey, fontSize: 14),
               ),
 

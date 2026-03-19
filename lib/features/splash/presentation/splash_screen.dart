@@ -146,7 +146,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               ),
               const SizedBox(height: 8),
               const Text(
-                "سوق حيك في هاتفك",
+                "سوق حارتكم في جوالك",
                 style: TextStyle(color: Colors.grey, fontSize: 16),
               ),
             ],

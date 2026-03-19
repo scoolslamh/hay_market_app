@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart'; // أضف هذا
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -9,8 +9,9 @@ import '../../../core/services/auth_storage.dart';
 import '../../../core/state/providers.dart';
 
 import '../../auth/presentation/login_screen.dart';
-import '../../auth/presentation/map_picker_screen.dart'; // استيراد شاشة الخريطة
+import '../../auth/presentation/map_picker_screen.dart';
 import '../../orders/presentation/orders_screen.dart';
+import '../../location/presentation/edit_location_screen.dart';
 
 class AccountScreen extends ConsumerStatefulWidget {
   const AccountScreen({super.key});
@@ -22,13 +23,42 @@ class AccountScreen extends ConsumerStatefulWidget {
 class _AccountScreenState extends ConsumerState<AccountScreen> {
   String? userName;
   String? avatarUrl;
+
+  String? address;
+  String? notes;
+
   bool uploading = false;
   final picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
-    Future.microtask(loadUserData);
+    Future.microtask(() {
+      loadUserData();
+      _loadAddress();
+    });
+  }
+
+  // تم إصلاح الخطأ عبر تعريف phone من الـ Provider
+  Future<void> _loadAddress() async {
+    // جلب رقم الهاتف من الحالة (Provider)
+    final phone = ref.read(appStateProvider).userPhone;
+    if (phone == null) return;
+
+    final data = await Supabase.instance.client
+        .from('addresses')
+        .select()
+        .eq('phone', phone) // استخدام phone كمعرف
+        .order('created_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+
+    if (!mounted) return;
+
+    setState(() {
+      address = data?['address_name'];
+      notes = data?['notes'];
+    });
   }
 
   Future<void> loadUserData() async {
@@ -51,28 +81,28 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     }
   }
 
-  /// دالة جلب وعرض العنوان الحالي في BottomSheet
   void _handleAddressTap() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
+    // جلب رقم الهاتف من الحالة (Provider)
+    final phone = ref.read(appStateProvider).userPhone;
+    if (phone == null) return;
 
-    // 1. جلب العنوان الحالي من جدول addresses
     final addressData = await Supabase.instance.client
         .from('addresses')
         .select()
-        .eq('user_id', user.id)
+        .eq('phone', phone) // استخدام phone كمعرف
         .order('created_at', ascending: false)
         .limit(1)
         .maybeSingle();
 
     String currentAddress =
         addressData?['address_name'] ?? "لا يوجد عنوان مسجل";
+    String? currentNotes = addressData?['notes'];
+
     double? lat = addressData?['lat'];
     double? lng = addressData?['lng'];
 
     if (!mounted) return;
 
-    // 2. عرض الـ BottomSheet
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -104,6 +134,14 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey[600], fontSize: 15),
             ),
+            if (currentNotes != null && currentNotes.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Text(
+                  "ملاحظات: $currentNotes",
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ),
             const SizedBox(height: 25),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
@@ -115,9 +153,8 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                 ),
               ),
               onPressed: () async {
-                Navigator.pop(context); // إغلاق الـ BottomSheet
+                Navigator.pop(context);
 
-                // الانتقال للخريطة وتمرير الموقع الحالي إن وجد
                 final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -129,15 +166,25 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                   ),
                 );
 
-                // إذا اختار موقعاً جديداً، سيتم الحفظ تلقائياً في الخريطة، ونحن هنا فقط نحدث الـ UI
                 if (result != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("تم تحديث العنوان بنجاح")),
-                  );
+                  await _loadAddress();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text("تم تحديث العنوان بنجاح"),
+                        backgroundColor: Colors.green,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
                 }
               },
               icon: const Icon(Icons.edit_location_alt),
-              label: const Text("تعديل الموقع من الخريطة"),
+              label: const Text("تعديل العنوان"),
             ),
           ],
         ),
@@ -145,20 +192,25 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     );
   }
 
-  // (دالة pickImage كما هي في كودك الأصلي...)
   Future<void> pickImage() async {
     final phone = ref.read(appStateProvider).userPhone;
     if (phone == null) return;
+
     final picked = await picker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 70,
     );
+
     if (picked == null) return;
+
     final file = File(picked.path);
     final path = "$phone/avatar.jpg";
+
     setState(() => uploading = true);
+
     try {
       final bytes = await file.readAsBytes();
+
       await Supabase.instance.client.storage
           .from("avatars")
           .uploadBinary(
@@ -166,14 +218,18 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
             bytes,
             fileOptions: const FileOptions(upsert: true),
           );
+
       final url = Supabase.instance.client.storage
           .from("avatars")
           .getPublicUrl(path);
+
       await Supabase.instance.client
           .from("users")
           .update({"avatar": url})
           .eq("phone", phone);
+
       final newUrl = "$url?v=${DateTime.now().millisecondsSinceEpoch}";
+
       setState(() {
         avatarUrl = newUrl;
         uploading = false;
@@ -186,15 +242,14 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
   @override
   Widget build(BuildContext context) {
     final phone = ref.watch(appStateProvider).userPhone;
+    final state = ref.watch(appStateProvider);
+
     const primaryColor = Color(0xFF004D40);
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text(
-          "حسابي",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text("لوحة التحكم"),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.white,
@@ -208,69 +263,35 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
             decoration: BoxDecoration(
               color: primaryColor,
               borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: primaryColor.withOpacity(0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
             ),
             child: Column(
               children: [
                 GestureDetector(
                   onTap: pickImage,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircleAvatar(
-                        radius: 50,
-                        backgroundColor: Colors.white24,
-                        backgroundImage: avatarUrl != null
-                            ? NetworkImage(avatarUrl!)
-                            : null,
-                        child: avatarUrl == null
-                            ? const Icon(
-                                Icons.camera_alt,
-                                size: 35,
-                                color: Colors.white,
-                              )
-                            : null,
-                      ),
-                      if (uploading)
-                        const CircleAvatar(
-                          radius: 50,
-                          backgroundColor: Colors.black45,
-                          child: CircularProgressIndicator(color: Colors.white),
-                        ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: CircleAvatar(
-                          radius: 15,
-                          backgroundColor: Colors.white,
-                          child: Icon(
-                            Icons.edit,
-                            size: 15,
-                            color: primaryColor,
-                          ),
-                        ),
-                      ),
-                    ],
+                  child: CircleAvatar(
+                    radius: 50,
+                    backgroundColor: Colors.white24,
+                    backgroundImage: avatarUrl != null
+                        ? NetworkImage(avatarUrl!)
+                        : null,
+                    child: uploading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : (avatarUrl == null
+                              ? const Icon(
+                                  Icons.camera_alt,
+                                  color: Colors.white,
+                                )
+                              : null),
                   ),
                 ),
                 const SizedBox(height: 15),
                 Text(
-                  userName ?? "مستخدم دكان الحي",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  userName ?? "مستخدم",
+                  style: const TextStyle(color: Colors.white, fontSize: 20),
                 ),
                 Text(
                   phone ?? "",
-                  style: const TextStyle(color: Colors.white70, fontSize: 16),
+                  style: const TextStyle(color: Colors.white70),
                 ),
               ],
             ),
@@ -285,20 +306,55 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
             ),
           ),
           _buildMenuTile(
-            icon: Icons.location_on_outlined,
-            title: "العنوان",
-            onTap: _handleAddressTap, // استدعاء الدالة الجديدة هنا
+            icon: Icons.store_mall_directory_outlined,
+            title: "موقعي (الحي والمتجر)",
+            subtitle:
+                "${state.neighborhoodName ?? ''} - ${state.marketName ?? ''}",
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const EditLocationScreen()),
+            ),
           ),
           _buildMenuTile(
-            icon: Icons.settings_outlined,
-            title: "الإعدادات",
-            onTap: () => ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text("الإعدادات قريباً"))),
+            icon: Icons.location_on_outlined,
+            title: "العنوان",
+            subtitle: address != null
+                ? "$address ${notes?.isNotEmpty == true ? '- $notes' : ''}"
+                : "حدد موقعك الآن",
+            onTap: () => _handleAddressTap(),
+          ),
+          _buildMenuTile(
+            icon: Icons.notifications_none,
+            title: "الإشعارات",
+            onTap: () {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text("قريباً")));
+            },
+          ),
+          _buildMenuTile(
+            icon: Icons.support_agent,
+            title: "الدعم",
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("تواصل معنا قريباً")),
+              );
+            },
+          ),
+          _buildMenuTile(
+            icon: Icons.info_outline,
+            title: "عن التطبيق",
+            onTap: () {
+              showAboutDialog(
+                context: context,
+                applicationName: "دكان الحارة",
+                applicationVersion: "1.0.0",
+                applicationLegalese: "© 2026 جميع الحقوق محفوظة",
+              );
+            },
           ),
           const SizedBox(height: 20),
           const Divider(),
-          const SizedBox(height: 10),
           ListTile(
             onTap: () async {
               final storage = AuthStorage();
@@ -313,12 +369,8 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
             leading: const Icon(Icons.logout, color: Colors.red),
             title: const Text(
               "تسجيل الخروج",
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+              style: TextStyle(color: Colors.red),
             ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
-            ),
-            tileColor: Colors.red.withOpacity(0.05),
           ),
         ],
       ),
@@ -328,6 +380,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
   Widget _buildMenuTile({
     required IconData icon,
     required String title,
+    String? subtitle,
     required VoidCallback onTap,
   }) {
     return Container(
@@ -335,19 +388,12 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.grey.shade200),
       ),
       child: ListTile(
         leading: Icon(icon, color: const Color(0xFF004D40)),
-        title: Text(
-          title,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-        ),
-        trailing: const Icon(
-          Icons.arrow_forward_ios,
-          size: 16,
-          color: Colors.grey,
-        ),
+        title: Text(title),
+        subtitle: subtitle != null ? Text(subtitle) : null,
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
         onTap: onTap,
       ),
     );
