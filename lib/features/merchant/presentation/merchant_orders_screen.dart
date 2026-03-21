@@ -142,7 +142,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: getStatusColor(order['status']).withOpacity(0.1),
+                      color: getStatusColor(order['status']).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(

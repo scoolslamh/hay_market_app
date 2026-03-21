@@ -43,47 +43,37 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Future<void> _checkAuthAndNavigate() async {
-    print("🔥 SPLASH STARTED 🔥");
-
     if (!mounted) return;
 
     try {
       /// 📱 1. جلب رقم الجوال
       final phone = await AuthStorage().getPhone();
 
-      print("PHONE: $phone");
-
       if (phone == null || phone.isEmpty) {
         _navigateTo(const LoginScreen());
         return;
       }
 
-      /// 🔥🔥🔥 2. التحقق من التاجر أولاً (الأهم)
+      /// 🔥 2. التحقق من التاجر أولاً
       final marketCheck = await Supabase.instance.client
           .from('markets')
           .select()
           .eq('owner_phone', phone);
 
-      print("MARKET CHECK: $marketCheck");
-
-      /// ✅ إذا كان تاجر → مباشرة لوحة التاجر
       if (marketCheck.isNotEmpty) {
         _navigateTo(const MerchantHomeScreen());
         return;
       }
 
-      /// 👤 3. التحقق من المستخدم (عميل)
+      /// 👤 3. التحقق من المستخدم
       final userData = await Supabase.instance.client
           .from('users')
           .select()
           .eq('phone', phone)
           .maybeSingle();
 
-      print("USER DATA: $userData");
-
       if (!mounted) return;
 
-      /// 💾 حفظ الرقم في AppState
       final notifier = ref.read(appStateProvider.notifier);
       notifier.setUserPhone(phone);
 
@@ -93,22 +83,47 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         return;
       }
 
-      /// 📍 بيانات العميل
-      final String? nId = userData['neighborhood_id']?.toString();
-      final String? mId = userData['market_id']?.toString();
+      /// 📍 الخطوة الأهم: قراءة الحي والمتجر من AuthStorage المحلي أولاً
+      final savedSelection = await AuthStorage().getUserSelection();
 
-      final String nName = userData['neighborhood_name']?.toString() ?? "";
-      final String mName = userData['market_name']?.toString() ?? "";
+      final String? localNId = savedSelection['neighborhoodId'];
+      final String? localMId = savedSelection['marketId'];
+      final String? localNName = savedSelection['neighborhoodName'];
+      final String? localMName = savedSelection['marketName'];
 
-      /// ✅ إذا مكتمل
-      if (nId != null && nId.isNotEmpty && mId != null && mId.isNotEmpty) {
-        notifier.setNeighborhood(nId, nName);
-        notifier.setMarket(mId, mName);
+      /// 📍 ثم من Supabase كـ fallback
+      final String? remoteNId = userData['neighborhood_id']?.toString();
+      final String? remoteMId = userData['market_id']?.toString();
+      final String? remoteNName = userData['neighborhood_name']?.toString();
+      final String? remoteMName = userData['market_name']?.toString();
+
+      /// ✅ الأولوية: المحلي أولاً، ثم السيرفر
+      final String? finalNId = (localNId != null && localNId.isNotEmpty)
+          ? localNId
+          : remoteNId;
+      final String? finalMId = (localMId != null && localMId.isNotEmpty)
+          ? localMId
+          : remoteMId;
+      final String finalNName = (localNName != null && localNName.isNotEmpty)
+          ? localNName
+          : (remoteNName ?? "");
+      final String finalMName = (localMName != null && localMName.isNotEmpty)
+          ? localMName
+          : (remoteMName ?? "");
+
+      /// ✅ إذا مكتمل → ادخل مباشرة
+      if (finalNId != null &&
+          finalNId.isNotEmpty &&
+          finalMId != null &&
+          finalMId.isNotEmpty) {
+        notifier.setNeighborhood(finalNId, finalNName);
+        notifier.setMarket(finalMId, finalMName);
 
         await notifier.loadInitialData();
 
         _navigateTo(const MainNavigation());
       } else {
+        /// ❗ لم يختر بعد → اذهب لاختيار الحي
         _navigateTo(const NeighborhoodScreen());
       }
     } catch (e) {

@@ -103,6 +103,8 @@ class _MarketsScreenState extends ConsumerState<MarketsScreen> {
                         marketName: market.name,
                       );
 
+                      if (!context.mounted) return;
+
                       /// الانتقال
                       Navigator.pushReplacement(
                         context,

@@ -135,7 +135,7 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
                     ),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
+                      children: [
                         Icon(Icons.location_on, color: Colors.red, size: 24),
                         SizedBox(width: 8),
                         Text(

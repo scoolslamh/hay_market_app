@@ -16,7 +16,8 @@ class Product {
       id: map['id'],
       name: map['name'],
       price: (map['price'] as num).toDouble(),
-      image: map['image'],
+      // ✅ إصلاح: القاعدة تحفظ الصورة في 'image_url' وليس 'image'
+      image: map['image_url'] ?? map['image'],
     );
   }
 }

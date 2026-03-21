@@ -75,12 +75,11 @@ class _EditLocationScreenState extends ConsumerState<EditLocationScreen> {
         child: Column(
           children: [
             /// 📍 اختيار الحي
-            DropdownButtonFormField(
-              value: selectedNeighborhoodId,
+            DropdownButtonFormField<String>(
               decoration: const InputDecoration(labelText: "الحي"),
               items: neighborhoods.map((n) {
-                return DropdownMenuItem(
-                  value: n['id'],
+                return DropdownMenuItem<String>(
+                  value: n['id'] as String,
                   child: Text(n['name'] ?? ""),
                 );
               }).toList(),
@@ -102,12 +101,11 @@ class _EditLocationScreenState extends ConsumerState<EditLocationScreen> {
             const SizedBox(height: 15),
 
             /// 🏪 اختيار المتجر
-            DropdownButtonFormField(
-              value: selectedMarketId,
+            DropdownButtonFormField<String>(
               decoration: const InputDecoration(labelText: "المتجر"),
               items: markets.map((m) {
-                return DropdownMenuItem(
-                  value: m['id'],
+                return DropdownMenuItem<String>(
+                  value: m['id'] as String,
                   child: Text(m['name'] ?? ""),
                 );
               }).toList(),
@@ -128,9 +126,11 @@ class _EditLocationScreenState extends ConsumerState<EditLocationScreen> {
               onPressed: () async {
                 final notifier = ref.read(appStateProvider.notifier);
                 final phone = ref.read(appStateProvider).userPhone;
+                final messenger = ScaffoldMessenger.of(context);
+                final navigator = Navigator.of(context);
 
                 if (phone == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  messenger.showSnackBar(
                     const SnackBar(content: Text("المستخدم غير معروف")),
                   );
                   return;
@@ -161,9 +161,9 @@ class _EditLocationScreenState extends ConsumerState<EditLocationScreen> {
 
                   if (!mounted) return;
 
-                  Navigator.pop(context);
+                  navigator.pop();
 
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  messenger.showSnackBar(
                     const SnackBar(
                       content: Text("تم حفظ الموقع بنجاح"),
                       backgroundColor: Colors.green,
@@ -172,7 +172,9 @@ class _EditLocationScreenState extends ConsumerState<EditLocationScreen> {
                 } catch (e) {
                   debugPrint("Save location error: $e");
 
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  if (!mounted) return;
+
+                  messenger.showSnackBar(
                     const SnackBar(
                       content: Text("حدث خطأ أثناء الحفظ"),
                       backgroundColor: Colors.red,

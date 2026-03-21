@@ -39,16 +39,14 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     });
   }
 
-  // تم إصلاح الخطأ عبر تعريف phone من الـ Provider
   Future<void> _loadAddress() async {
-    // جلب رقم الهاتف من الحالة (Provider)
     final phone = ref.read(appStateProvider).userPhone;
     if (phone == null) return;
 
     final data = await Supabase.instance.client
         .from('addresses')
         .select()
-        .eq('phone', phone) // استخدام phone كمعرف
+        .eq('phone', phone)
         .order('created_at', ascending: false)
         .limit(1)
         .maybeSingle();
@@ -72,6 +70,8 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
           .eq("phone", phone)
           .single();
 
+      if (!mounted) return;
+
       setState(() {
         userName = response["name"];
         avatarUrl = response["avatar"];
@@ -82,14 +82,13 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
   }
 
   void _handleAddressTap() async {
-    // جلب رقم الهاتف من الحالة (Provider)
     final phone = ref.read(appStateProvider).userPhone;
     if (phone == null) return;
 
     final addressData = await Supabase.instance.client
         .from('addresses')
         .select()
-        .eq('phone', phone) // استخدام phone كمعرف
+        .eq('phone', phone)
         .order('created_at', ascending: false)
         .limit(1)
         .maybeSingle();
@@ -153,6 +152,9 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                 ),
               ),
               onPressed: () async {
+                // ✅ حفظ messenger قبل أي await
+                final messenger = ScaffoldMessenger.of(context);
+
                 Navigator.pop(context);
 
                 final result = await Navigator.push(
@@ -168,19 +170,18 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
 
                 if (result != null) {
                   await _loadAddress();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text("تم تحديث العنوان بنجاح"),
-                        backgroundColor: Colors.green,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        duration: const Duration(seconds: 2),
+                  if (!mounted) return;
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: const Text("تم تحديث العنوان بنجاح"),
+                      backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    );
-                  }
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
                 }
               },
               icon: const Icon(Icons.edit_location_alt),
@@ -230,11 +231,14 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
 
       final newUrl = "$url?v=${DateTime.now().millisecondsSinceEpoch}";
 
+      if (!mounted) return;
+
       setState(() {
         avatarUrl = newUrl;
         uploading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => uploading = false);
     }
   }
@@ -357,11 +361,12 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
           const Divider(),
           ListTile(
             onTap: () async {
+              // ✅ حفظ navigator قبل await
+              final navigator = Navigator.of(context);
               final storage = AuthStorage();
               await storage.logout();
               if (!mounted) return;
-              Navigator.pushAndRemoveUntil(
-                context,
+              navigator.pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const LoginScreen()),
                 (route) => false,
               );

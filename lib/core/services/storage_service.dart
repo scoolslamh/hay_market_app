@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class StorageService {
@@ -26,7 +27,7 @@ class StorageService {
 
       return publicUrl;
     } catch (e) {
-      print("Upload error: $e");
+      debugPrint("Upload error: $e");
       return null;
     }
   }

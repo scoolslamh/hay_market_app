@@ -35,7 +35,7 @@ class _NeighborhoodScreenState extends ConsumerState<NeighborhoodScreen> {
       });
     } catch (e) {
       setState(() => isLoading = false);
-
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("حدث خطأ أثناء تحميل الأحياء")),
       );

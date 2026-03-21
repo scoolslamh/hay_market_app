@@ -69,7 +69,6 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
   @override
   Widget build(BuildContext context) {
     final cartService = ref.watch(cartServiceProvider);
-    final appState = ref.watch(appStateProvider);
 
     /// ⏳ أثناء تحميل البيانات
     if (isLoading) {

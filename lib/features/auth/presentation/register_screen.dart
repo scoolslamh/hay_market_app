@@ -140,12 +140,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ),
                 ),
                 validator: (value) {
-                  if (value == null || value.isEmpty)
+                  if (value == null || value.isEmpty) {
                     return "يرجى إدخال البريد";
+                  }
                   if (!RegExp(
                     r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                  ).hasMatch(value))
+                  ).hasMatch(value)) {
                     return "بريد غير صحيح";
+                  }
                   return null;
                 },
               ),

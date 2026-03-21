@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/auth_storage.dart';
 import 'add_product_screen.dart';
-import 'order_details_screen.dart';
 
 class MerchantProductsScreen extends StatefulWidget {
   const MerchantProductsScreen({super.key});
@@ -80,6 +79,7 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
         products.removeWhere((p) => p['id'].toString() == id);
       });
 
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("تم حذف المنتج")));

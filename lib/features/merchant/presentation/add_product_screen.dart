@@ -72,12 +72,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
       final publicUrl = supabase.storage.from('products').getPublicUrl(path);
 
-      print("✅ IMAGE UPLOADED: $publicUrl");
+      debugPrint("✅ IMAGE UPLOADED: $publicUrl");
 
       return publicUrl;
     } catch (e) {
       debugPrint("🔥 UPLOAD ERROR: $e");
 
+      if (!mounted) return null;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("خطأ رفع الصورة: $e")));
@@ -104,11 +105,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
         uploadProgress = 0.1;
       });
 
-      print("📦 MARKET ID: ${widget.marketId}");
+      debugPrint("📦 MARKET ID: ${widget.marketId}");
 
       final uploadedImage = await uploadImage();
 
-      print("🖼️ IMAGE URL: $uploadedImage");
+      debugPrint("🖼️ IMAGE URL: $uploadedImage");
 
       /// 🔥 مهم: لا نخليها null
       final imageToSave = uploadedImage ?? imageUrl ?? "";

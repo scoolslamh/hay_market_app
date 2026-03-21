@@ -157,7 +157,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         trailing: Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
-            color: getStatusColor(order.status).withOpacity(0.1),
+            color: getStatusColor(order.status).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(

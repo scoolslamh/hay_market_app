@@ -32,6 +32,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         order['status'] = status;
       });
 
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("تم تحديث الحالة")));
@@ -107,7 +108,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                     subtitle: Text("الكمية: ${p['quantity'] ?? 1}"),
                   ),
                 );
-              }).toList(),
+              }),
 
             const SizedBox(height: 20),
 
@@ -123,7 +124,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
+                color: Colors.green.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(

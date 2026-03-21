@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/services/product_service.dart';
+import '../../../core/services/cart_service.dart';
 import '../../../core/models/product.dart';
 import '../../../core/state/providers.dart';
 import '../../markets/presentation/markets_screen.dart';
@@ -128,7 +129,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildProductsGrid(var cartService) {
+  Widget _buildProductsGrid(CartService cartService) {
     return GridView.builder(
       padding: const EdgeInsets.all(12),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -145,7 +146,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildProductCard(Product product, var cartService) {
+  Widget _buildProductCard(Product product, CartService cartService) {
     return Card(
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
