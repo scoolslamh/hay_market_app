@@ -42,7 +42,7 @@ class OrderService extends ChangeNotifier {
   Future<void> createOrder({required WidgetRef ref}) async {
     final cart = CartService.instance;
 
-    if (cart.cartItems.isEmpty) {
+    if (cart.items.isEmpty) {
       throw Exception("السلة فارغة");
     }
 
@@ -65,9 +65,17 @@ class OrderService extends ChangeNotifier {
     final address = addressData?['address_name'] ?? "";
     final notes = addressData?['notes'] ?? "";
 
-    /// 🛒 المنتجات
-    final productsJson = cart.cartItems
-        .map((p) => {"id": p.id, "name": p.name, "price": p.price})
+    /// 🛒 المنتجات مع الكمية
+    final productsJson = cart.items
+        .map(
+          (item) => {
+            "id": item.product.id,
+            "name": item.product.name,
+            "price": item.product.price,
+            "quantity": item.quantity,
+            "subtotal": item.subtotal,
+          },
+        )
         .toList();
 
     try {
