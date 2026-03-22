@@ -158,122 +158,132 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
+      builder: (sheetContext) => Padding(
+        // ✅ يقرأ ارتفاع الكيبورد من context الداخلي
         padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          top: 20,
-          left: 20,
-          right: 20,
+          bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              "تعديل البيانات",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: nameController,
-              textAlign: TextAlign.right,
-              decoration: InputDecoration(
-                labelText: "الاسم الكامل",
-                prefixIcon: const Icon(
-                  Icons.person_outline,
-                  color: _primaryDark,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: _primary, width: 1.5),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: emailController,
-              textAlign: TextAlign.right,
-              keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(
-                labelText: "البريد الإلكتروني",
-                prefixIcon: const Icon(
-                  Icons.email_outlined,
-                  color: _primaryDark,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: _primary, width: 1.5),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _primaryDark,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 ),
-                onPressed: () async {
-                  final phone = ref.read(appStateProvider).userPhone;
-                  if (phone == null) return;
-                  try {
-                    await Supabase.instance.client
-                        .from("users")
-                        .update({
-                          "name": nameController.text.trim(),
-                          "email": emailController.text.trim(),
-                        })
-                        .eq("phone", phone);
-                    if (!mounted) return;
-                    setState(() {
-                      userName = nameController.text.trim();
-                      userEmail = emailController.text.trim();
-                    });
-                    Navigator.pop(context);
-                    AppNotification.success(context, "تم تحديث البيانات بنجاح");
-                  } catch (e) {
-                    if (!mounted) return;
-                    AppNotification.error(context, "حدث خطأ أثناء الحفظ");
-                  }
-                },
-                child: const Text(
-                  "حفظ التعديلات",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                const SizedBox(height: 20),
+                const Text(
+                  "تعديل البيانات",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: Colors.black87,
+                  ),
                 ),
-              ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameController,
+                  textAlign: TextAlign.right,
+                  decoration: InputDecoration(
+                    labelText: "الاسم الكامل",
+                    prefixIcon: const Icon(
+                      Icons.person_outline,
+                      color: _primaryDark,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: _primary, width: 1.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: emailController,
+                  textAlign: TextAlign.right,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    labelText: "البريد الإلكتروني",
+                    prefixIcon: const Icon(
+                      Icons.email_outlined,
+                      color: _primaryDark,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: _primary, width: 1.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _primaryDark,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onPressed: () async {
+                      final phone = ref.read(appStateProvider).userPhone;
+                      if (phone == null) return;
+                      try {
+                        await Supabase.instance.client
+                            .from("users")
+                            .update({
+                              "name": nameController.text.trim(),
+                              "email": emailController.text.trim(),
+                            })
+                            .eq("phone", phone);
+                        if (!mounted) return;
+                        setState(() {
+                          userName = nameController.text.trim();
+                          userEmail = emailController.text.trim();
+                        });
+                        Navigator.pop(context);
+                        AppNotification.success(
+                          context,
+                          "تم تحديث البيانات بنجاح",
+                        );
+                      } catch (e) {
+                        if (!mounted) return;
+                        AppNotification.error(context, "حدث خطأ أثناء الحفظ");
+                      }
+                    },
+                    child: const Text(
+                      "حفظ التعديلات",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

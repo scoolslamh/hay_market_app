@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/app_notification.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/auth_storage.dart';
 import 'add_product_screen.dart';
@@ -97,16 +98,7 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
       await supabase.from('products').delete().eq('id', id);
       if (!mounted) return;
       setState(() => products.removeWhere((p) => p['id'].toString() == id));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("تم حذف المنتج"),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
+      AppNotification.error(context, "تم حذف المنتج");
     } catch (e) {
       debugPrint("Delete error: $e");
     }

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../../core/utils/app_notification.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -26,13 +27,33 @@ class _AddProductScreenState extends State<AddProductScreen> {
   bool isLoading = false;
   bool isUploadingImage = false;
 
+  // ✅ الأقسام
+  List<Map<String, dynamic>> categories = [];
+  String? selectedCategoryId;
+
   @override
   void initState() {
     super.initState();
+    _loadCategories();
     if (widget.product != null) {
       nameController.text = widget.product!['name'] ?? '';
       priceController.text = widget.product!['price']?.toString() ?? '';
       imageUrl = widget.product!['image_url'];
+      selectedCategoryId = widget.product!['category_id'];
+    }
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final data = await supabase
+          .from('categories')
+          .select()
+          .order('sort_order', ascending: true);
+      if (mounted) {
+        setState(() => categories = List<Map<String, dynamic>>.from(data));
+      }
+    } catch (e) {
+      debugPrint("Load categories error: $e");
     }
   }
 
@@ -83,16 +104,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     } catch (e) {
       debugPrint("Upload error: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text("فشل رفع الصورة — سيتم الحفظ بدونها"),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
+        AppNotification.warning(context, "فشل رفع الصورة — سيتم الحفظ بدونها");
       }
       // ✅ لا نخرج — نرجع الصورة القديمة
       return imageUrl;
@@ -106,13 +118,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     final price = double.tryParse(priceController.text.trim());
 
     if (name.isEmpty || price == null || price <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("تأكد من إدخال الاسم والسعر بشكل صحيح"),
-          backgroundColor: Colors.orange,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      AppNotification.warning(context, "تأكد من إدخال الاسم والسعر بشكل صحيح");
       return;
     }
 
@@ -129,40 +135,32 @@ class _AddProductScreenState extends State<AddProductScreen> {
           "market_id": widget.marketId,
           "image_url": imageToSave,
           "stock": 10,
+          "category_id": selectedCategoryId,
         });
       } else {
         await supabase
             .from('products')
-            .update({"name": name, "price": price, "image_url": imageToSave})
+            .update({
+              "name": name,
+              "price": price,
+              "image_url": imageToSave,
+              "category_id": selectedCategoryId,
+            })
             .eq('id', widget.product!['id']);
       }
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            widget.product == null ? "✅ تمت إضافة المنتج" : "✅ تم تحديث المنتج",
-          ),
-          backgroundColor: _primary,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+      AppNotification.success(
+        context,
+        widget.product == null ? "✅ تمت إضافة المنتج" : "✅ تم تحديث المنتج",
       );
 
       Navigator.pop(context);
     } catch (e) {
       debugPrint("Save error: $e");
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("حدث خطأ: $e"),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      AppNotification.error(context, "حدث خطأ: $e");
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -310,6 +308,49 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 borderSide: const BorderSide(color: _primary, width: 1.5),
               ),
             ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // ── القسم ──
+          DropdownButtonFormField<String>(
+            value: selectedCategoryId,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: "القسم (اختياري)",
+              prefixIcon: const Icon(
+                Icons.category_outlined,
+                color: _primaryDark,
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: Colors.grey.shade200),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: Colors.grey.shade200),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: _primary, width: 1.5),
+              ),
+            ),
+            hint: const Text("اختر القسم"),
+            items: [
+              const DropdownMenuItem<String>(
+                value: null,
+                child: Text("بدون قسم"),
+              ),
+              ...categories.map(
+                (cat) => DropdownMenuItem<String>(
+                  value: cat['id'] as String,
+                  child: Text("${cat['emoji'] ?? '📦'} ${cat['name']}"),
+                ),
+              ),
+            ],
+            onChanged: (val) => setState(() => selectedCategoryId = val),
           ),
 
           const SizedBox(height: 30),

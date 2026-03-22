@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/app_notification.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -127,15 +128,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       if (!mounted) return;
       setState(() => order['status'] = nextStatus);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("✅ تم التحديث: ${_stages[currentIdx + 1]['label']}"),
-          backgroundColor: _primary,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+      AppNotification.success(
+        context,
+        "✅ تم التحديث: ${_stages[currentIdx + 1]['label']}",
       );
     } catch (e) {
       debugPrint("Update error: $e");
