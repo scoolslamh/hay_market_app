@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/app_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -28,18 +29,14 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     final otp = otpController.text.trim();
 
     if (otp.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("الرجاء إدخال رمز التحقق")));
+      AppNotification.warning(context, "الرجاء إدخال رمز التحقق");
       return;
     }
 
     final originalPhone = ref.read(appStateProvider).userPhone;
 
     if (originalPhone == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("حدث خطأ: رقم الهاتف غير موجود")),
-      );
+      AppNotification.error(context, "حدث خطأ: رقم الهاتف غير موجود");
       return;
     }
 
@@ -88,15 +85,11 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     } on AuthException catch (e) {
       if (mounted) {
         // إذا فشل بالرقم الصافي، نحاول مرة أخيرة بالرقم الأصلي (احتياطاً)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("خطأ: ${e.message}")));
+        AppNotification.error(context, "خطأ: ${e.message}");
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("حدث خطأ غير متوقع")));
+        AppNotification.error(context, "حدث خطأ غير متوقع");
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

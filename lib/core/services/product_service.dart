@@ -7,7 +7,13 @@ class ProductService {
     final response = await supabase
         .from('products')
         .select()
-        .eq('market_id', marketId);
+        .eq('market_id', marketId)
+        // ✅ إخفاء المنتجات النافدة (stock = 0)
+        // stock is null = منتج قديم قبل إضافة المخزون → يظهر
+        // stock > 0 = منتج متوفر → يظهر
+        // stock = 0 = نفذ المخزون → يختفي
+        .or('stock.gt.0,stock.is.null')
+        .order('created_at', ascending: false);
 
     return List<Map<String, dynamic>>.from(response);
   }

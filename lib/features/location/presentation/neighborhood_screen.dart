@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/app_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -36,9 +37,7 @@ class _NeighborhoodScreenState extends ConsumerState<NeighborhoodScreen> {
     } catch (e) {
       setState(() => isLoading = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("حدث خطأ أثناء تحميل الأحياء")),
-      );
+      AppNotification.error(context, "حدث خطأ أثناء تحميل الأحياء");
     }
   }
 
@@ -65,9 +64,7 @@ class _NeighborhoodScreenState extends ConsumerState<NeighborhoodScreen> {
         MaterialPageRoute(builder: (_) => const MarketsScreen()),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("حدث خطأ أثناء اختيار الحي")),
-      );
+      AppNotification.error(context, "حدث خطأ أثناء اختيار الحي");
     }
   }
 

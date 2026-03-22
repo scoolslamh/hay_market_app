@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../../core/utils/app_notification.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -25,11 +26,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
   bool isLoading = false;
   double uploadProgress = 0;
 
-  // ✅ الأقسام
-  List<Map<String, dynamic>> categories = [];
-  String? selectedCategoryId;
-  bool loadingCategories = true;
-
   @override
   void initState() {
     super.initState();
@@ -38,29 +34,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
       nameController.text = widget.product!['name'] ?? "";
       priceController.text = widget.product!['price']?.toString() ?? "";
       imageUrl = widget.product!['image_url'];
-      selectedCategoryId = widget.product!['category_id'];
-    }
-
-    _loadCategories();
-  }
-
-  /// ✅ جلب الأقسام من Supabase
-  Future<void> _loadCategories() async {
-    try {
-      final data = await supabase
-          .from('categories')
-          .select()
-          .order('sort_order', ascending: true);
-
-      if (mounted) {
-        setState(() {
-          categories = List<Map<String, dynamic>>.from(data);
-          loadingCategories = false;
-        });
-      }
-    } catch (e) {
-      debugPrint("Load categories error: $e");
-      if (mounted) setState(() => loadingCategories = false);
     }
   }
 
@@ -91,6 +64,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
       setState(() => uploadProgress = 0.2);
 
       final fileName = "product_${DateTime.now().millisecondsSinceEpoch}.jpg";
+
       final path = "${widget.marketId}/$fileName";
 
       await supabase.storage.from('products').upload(path, imageFile!);
@@ -99,14 +73,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
       final publicUrl = supabase.storage.from('products').getPublicUrl(path);
 
+      debugPrint("✅ IMAGE UPLOADED: $publicUrl");
+
       return publicUrl;
     } catch (e) {
       debugPrint("🔥 UPLOAD ERROR: $e");
 
       if (!mounted) return null;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("خطأ رفع الصورة: $e")));
+      AppNotification.error(context, "خطأ رفع الصورة: $e");
 
       return null;
     }
@@ -118,9 +92,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     final price = double.tryParse(priceController.text.trim());
 
     if (name.isEmpty || price == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("تحقق من البيانات")));
+      AppNotification.warning(context, "تحقق من البيانات");
       return;
     }
 
@@ -130,46 +102,41 @@ class _AddProductScreenState extends State<AddProductScreen> {
         uploadProgress = 0.1;
       });
 
+      debugPrint("📦 MARKET ID: ${widget.marketId}");
+
       final uploadedImage = await uploadImage();
+
+      debugPrint("🖼️ IMAGE URL: $uploadedImage");
+
+      /// 🔥 مهم: لا نخليها null
       final imageToSave = uploadedImage ?? imageUrl ?? "";
 
       if (widget.product == null) {
-        // ✅ إضافة منتج جديد مع القسم
         await supabase.from('products').insert({
           "name": name,
           "price": price,
           "market_id": widget.marketId,
           "image_url": imageToSave,
-          "category_id": selectedCategoryId,
         });
       } else {
-        // ✅ تعديل منتج موجود مع القسم
         await supabase
             .from('products')
-            .update({
-              "name": name,
-              "price": price,
-              "image_url": imageToSave,
-              "category_id": selectedCategoryId,
-            })
+            .update({"name": name, "price": price, "image_url": imageToSave})
             .eq('id', widget.product!['id']);
       }
 
       if (!mounted) return;
+
       Navigator.pop(context);
     } catch (e) {
       debugPrint("🔥 SAVE ERROR: $e");
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("خطأ: $e")));
+
+      AppNotification.error(context, "خطأ: $e");
     } finally {
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-          uploadProgress = 0;
-        });
-      }
+      setState(() {
+        isLoading = false;
+        uploadProgress = 0;
+      });
     }
   }
 
@@ -212,6 +179,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                             ),
                     ),
                   ),
+
                   if (isLoading)
                     Container(
                       height: 160,
@@ -232,7 +200,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
             const SizedBox(height: 20),
 
-            /// اسم المنتج
             TextField(
               controller: nameController,
               decoration: const InputDecoration(
@@ -243,7 +210,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
             const SizedBox(height: 15),
 
-            /// السعر
             TextField(
               controller: priceController,
               keyboardType: TextInputType.number,
@@ -252,42 +218,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
-
-            const SizedBox(height: 15),
-
-            /// ✅ القسم
-            loadingCategories
-                ? const Center(child: CircularProgressIndicator())
-                : DropdownButtonFormField<String>(
-                    value: selectedCategoryId,
-                    decoration: InputDecoration(
-                      labelText: "القسم",
-                      border: const OutlineInputBorder(),
-                      prefixIcon: selectedCategoryId != null
-                          ? Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Text(
-                                categories.firstWhere(
-                                      (c) => c['id'] == selectedCategoryId,
-                                      orElse: () => {'emoji': ''},
-                                    )['emoji'] ??
-                                    '',
-                                style: const TextStyle(fontSize: 20),
-                              ),
-                            )
-                          : null,
-                    ),
-                    hint: const Text("اختر القسم"),
-                    items: categories.map((cat) {
-                      return DropdownMenuItem<String>(
-                        value: cat['id'] as String,
-                        child: Text("${cat['emoji'] ?? ''} ${cat['name']}"),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() => selectedCategoryId = value);
-                    },
-                  ),
 
             const SizedBox(height: 30),
 

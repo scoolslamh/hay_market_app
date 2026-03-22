@@ -11,7 +11,6 @@ class OrderService extends ChangeNotifier {
   final SupabaseClient supabase = Supabase.instance.client;
 
   int _ordersCount = 0;
-
   int get count => _ordersCount;
 
   void _increase() {
@@ -24,22 +23,23 @@ class OrderService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 🔥 جلب آخر عنوان (مربوط بـ user_id)
-  Future<Map<String, dynamic>?> _getLatestAddress() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return null;
-
+  /// ✅ جلب آخر عنوان بـ phone (مصلح من user_id إلى phone)
+  Future<Map<String, dynamic>?> _getLatestAddress(String phone) async {
     return await supabase
         .from('addresses')
         .select()
-        .eq('user_id', user.id)
+        .eq('phone', phone)
         .order('created_at', ascending: false)
         .limit(1)
         .maybeSingle();
   }
 
-  /// 🧾 إنشاء طلب جديد (نسخة احترافية)
-  Future<void> createOrder({required WidgetRef ref}) async {
+  /// 🧾 إنشاء طلب جديد
+  Future<void> createOrder({
+    required WidgetRef ref,
+    String customerNotes = '',
+    String paymentMethod = 'cash',
+  }) async {
     final cart = CartService.instance;
 
     if (cart.items.isEmpty) {
@@ -47,23 +47,16 @@ class OrderService extends ChangeNotifier {
     }
 
     final phone = await AuthStorage().getPhone();
+    if (phone == null) throw Exception("المستخدم غير مسجل");
 
-    if (phone == null) {
-      throw Exception("المستخدم غير مسجل");
-    }
-
-    /// 🔥 المصدر الوحيد للحالة
     final state = ref.read(appStateProvider);
+    if (state.marketId == null) throw Exception("لم يتم تحديد متجر");
 
-    if (state.marketId == null) {
-      throw Exception("لم يتم تحديد متجر");
-    }
-
-    /// 🔥 جلب العنوان
-    final addressData = await _getLatestAddress();
-
-    final address = addressData?['address_name'] ?? "";
-    final notes = addressData?['notes'] ?? "";
+    /// ✅ جلب العنوان من addresses بـ phone
+    final addressData = await _getLatestAddress(phone);
+    final deliveryAddress = addressData?['address_name'] ?? "";
+    final addressLat = addressData?['lat'];
+    final addressLng = addressData?['lng'];
 
     /// 🛒 المنتجات مع الكمية
     final productsJson = cart.items
@@ -83,15 +76,20 @@ class OrderService extends ChangeNotifier {
           .from("orders")
           .insert({
             "phone": phone,
-
-            /// 🔥 الربط الأساسي
             "market_id": state.marketId,
-
-            /// 🔥 بيانات العرض
             "market": state.marketName,
             "neighborhood": state.neighborhoodName,
-            "address": address,
-            "notes": notes,
+
+            // ✅ العنوان الكامل من جدول addresses
+            "address": deliveryAddress,
+            "address_lat": addressLat,
+            "address_lng": addressLng,
+
+            // ✅ ملاحظات العميل من Bottom Sheet
+            "notes": customerNotes,
+
+            // ✅ طريقة الدفع
+            "payment_method": paymentMethod,
 
             "products": productsJson,
             "total": cart.total,
@@ -114,7 +112,6 @@ class OrderService extends ChangeNotifier {
   Future<List<Map<String, dynamic>>> getOrdersByPhone() async {
     try {
       final phone = await AuthStorage().getPhone();
-
       if (phone == null) return [];
 
       final response = await supabase

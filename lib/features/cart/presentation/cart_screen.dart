@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/services/order_service.dart';
 import '../../../core/services/cart_service.dart';
 import '../../../core/state/providers.dart';
+import '../../../core/utils/app_notification.dart';
 
 class CartScreen extends ConsumerStatefulWidget {
   const CartScreen({super.key});
@@ -20,45 +22,39 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   static const Color _primary = Color(0xFF4CAF50);
   static const Color _primaryDark = Color(0xFF004D40);
 
-  Future<void> sendOrder() async {
+  void _startOrderFlow() {
     final cartService = ref.read(cartServiceProvider);
-
     if (cartService.items.isEmpty) return;
 
     final appState = ref.read(appStateProvider);
-    final phone = appState.userPhone;
-    final marketId = appState.marketId;
-
-    if (phone == null || marketId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("بيانات المستخدم أو المتجر غير مكتملة")),
-      );
+    if (appState.userPhone == null || appState.marketId == null) {
+      AppNotification.warning(context, "بيانات المستخدم أو المتجر غير مكتملة");
       return;
     }
 
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          _OrderFlowSheet(cartService: cartService, onConfirm: _sendOrder),
+    );
+  }
+
+  Future<void> _sendOrder(String notes, String paymentMethod) async {
+    setState(() => isSending = true);
     try {
-      setState(() => isSending = true);
-
-      await orderService.createOrder(ref: ref);
-      cartService.clearCart();
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("🚀 تم إرسال طلبك بنجاح!"),
-          backgroundColor: _primary,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+      await orderService.createOrder(
+        ref: ref,
+        customerNotes: notes,
+        paymentMethod: paymentMethod,
       );
+      ref.read(cartServiceProvider).clearCart();
+      if (!mounted) return;
+      AppNotification.success(context, "🚀 تم إرسال طلبك بنجاح!");
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("حدث خطأ: $e")));
+      AppNotification.error(context, "حدث خطأ: $e");
     } finally {
       if (mounted) setState(() => isSending = false);
     }
@@ -86,31 +82,29 @@ class _CartScreenState extends ConsumerState<CartScreen> {
         actions: [
           if (items.isNotEmpty)
             TextButton(
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                    title: const Text("تفريغ السلة"),
-                    content: const Text("هل تريد حذف جميع المنتجات؟"),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text("إلغاء"),
+              onPressed: () => showDialog(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text("تفريغ السلة"),
+                  content: const Text("هل تريد حذف جميع المنتجات؟"),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("إلغاء"),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        cartService.clearCart();
+                        Navigator.pop(context);
+                      },
+                      child: const Text(
+                        "تفريغ",
+                        style: TextStyle(color: Colors.red),
                       ),
-                      TextButton(
-                        onPressed: () {
-                          cartService.clearCart();
-                          Navigator.pop(context);
-                        },
-                        child: const Text(
-                          "تفريغ",
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+                    ),
+                  ],
+                ),
+              ),
               child: const Text(
                 "تفريغ",
                 style: TextStyle(color: Colors.red, fontSize: 14),
@@ -122,7 +116,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
           ? _buildEmptyCart()
           : Column(
               children: [
-                // ── عدد المنتجات ──
                 Container(
                   color: Colors.white,
                   padding: const EdgeInsets.symmetric(
@@ -152,8 +145,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                     ],
                   ),
                 ),
-
-                // ── قائمة المنتجات ──
                 Expanded(
                   child: ListView.separated(
                     padding: const EdgeInsets.all(16),
@@ -163,17 +154,12 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                         _buildCartItem(items[index], cartService),
                   ),
                 ),
-
-                // ── الإجمالي وزر الطلب ──
                 _buildOrderSummary(cartService),
               ],
             ),
     );
   }
 
-  // ══════════════════════════════════════
-  // عنصر في السلة
-  // ══════════════════════════════════════
   Widget _buildCartItem(CartItem item, CartService cartService) {
     return Container(
       decoration: BoxDecoration(
@@ -191,7 +177,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            // ── الصورة ──
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: Container(
@@ -226,10 +211,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                       ),
               ),
             ),
-
             const SizedBox(width: 12),
-
-            // ── اسم المنتج والسعر ──
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -280,13 +262,9 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                 ],
               ),
             ),
-
             const SizedBox(width: 8),
-
-            // ── أزرار الكمية + حذف ──
             Column(
               children: [
-                // زر حذف
                 GestureDetector(
                   onTap: () => cartService.removeFromCart(item.product),
                   child: Container(
@@ -304,7 +282,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                // أزرار + و -
                 Container(
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey.shade200),
@@ -312,7 +289,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                   ),
                   child: Row(
                     children: [
-                      // زر -
                       GestureDetector(
                         onTap: () => cartService.decreaseQty(item.product.id),
                         child: Container(
@@ -331,7 +307,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                           ),
                         ),
                       ),
-                      // الكمية
                       SizedBox(
                         width: 28,
                         child: Text(
@@ -343,7 +318,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                           ),
                         ),
                       ),
-                      // زر +
                       GestureDetector(
                         onTap: () => cartService.increaseQty(item.product.id),
                         child: Container(
@@ -373,9 +347,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     );
   }
 
-  // ══════════════════════════════════════
-  // السلة الفارغة
-  // ══════════════════════════════════════
   Widget _buildEmptyCart() {
     return Center(
       child: Column(
@@ -401,9 +372,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     );
   }
 
-  // ══════════════════════════════════════
-  // الإجمالي وزر الطلب
-  // ══════════════════════════════════════
   Widget _buildOrderSummary(CartService cartService) {
     final total = cartService.total;
     final totalStr = total % 1 == 0
@@ -427,7 +395,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // شريط سحب
             Center(
               child: Container(
                 width: 40,
@@ -439,8 +406,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
               ),
             ),
             const SizedBox(height: 16),
-
-            // تفاصيل الإجمالي
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -470,10 +435,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                 ),
               ],
             ),
-
             const SizedBox(height: 14),
-
-            // زر الطلب
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -486,7 +448,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                onPressed: isSending ? null : sendOrder,
+                onPressed: isSending ? null : _startOrderFlow,
                 child: isSending
                     ? const SizedBox(
                         width: 24,
@@ -516,6 +478,465 @@ class _CartScreenState extends ConsumerState<CartScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════
+// Bottom Sheet — خطوات تأكيد الطلب
+// ══════════════════════════════════════════════════
+class _OrderFlowSheet extends StatefulWidget {
+  final CartService cartService;
+  final Future<void> Function(String notes, String paymentMethod) onConfirm;
+
+  const _OrderFlowSheet({required this.cartService, required this.onConfirm});
+
+  @override
+  State<_OrderFlowSheet> createState() => _OrderFlowSheetState();
+}
+
+class _OrderFlowSheetState extends State<_OrderFlowSheet> {
+  int _step = 0;
+  String _selectedPayment = '';
+  final _notesController = TextEditingController();
+  bool _isSending = false;
+  String? _address;
+  bool _loadingAddress = true;
+
+  static const Color _primary = Color(0xFF4CAF50);
+  static const Color _primaryDark = Color(0xFF004D40);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAddress();
+  }
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadAddress() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('addresses')
+          .select()
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (mounted) {
+        setState(() {
+          _address = data?['address_name'] ?? "لم يتم تحديد عنوان";
+          _loadingAddress = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingAddress = false);
+    }
+  }
+
+  Future<void> _confirm() async {
+    setState(() => _isSending = true);
+    await widget.onConfirm(_notesController.text.trim(), _selectedPayment);
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // شريط سحب
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              _buildStepIndicator(),
+              const SizedBox(height: 24),
+
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: _buildStepContent(),
+              ),
+
+              const SizedBox(height: 20),
+              _buildNavButtons(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepIndicator() {
+    final steps = ['الموقع', 'ملاحظات', 'الدفع'];
+    return Row(
+      children: List.generate(steps.length, (i) {
+        final isActive = i == _step;
+        final isDone = i < _step;
+        return Expanded(
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: isDone
+                            ? _primary
+                            : isActive
+                            ? _primaryDark
+                            : Colors.grey[200],
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: isDone
+                            ? const Icon(
+                                Icons.check,
+                                color: Colors.white,
+                                size: 16,
+                              )
+                            : Text(
+                                '${i + 1}',
+                                style: TextStyle(
+                                  color: isActive
+                                      ? Colors.white
+                                      : Colors.grey[500],
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      steps[i],
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isActive ? _primaryDark : Colors.grey[400],
+                        fontWeight: isActive
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (i < steps.length - 1)
+                Expanded(
+                  child: Container(
+                    height: 2,
+                    margin: const EdgeInsets.only(bottom: 20),
+                    color: i < _step ? _primary : Colors.grey[200],
+                  ),
+                ),
+            ],
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildStepContent() {
+    switch (_step) {
+      case 0:
+        return _buildLocationStep();
+      case 1:
+        return _buildNotesStep();
+      case 2:
+        return _buildPaymentStep();
+      default:
+        return const SizedBox();
+    }
+  }
+
+  Widget _buildLocationStep() {
+    return Column(
+      key: const ValueKey(0),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "عنوان التوصيل",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.location_on, color: _primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _loadingAddress
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(
+                        _address ?? "لم يتم تحديد عنوان",
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black87,
+                        ),
+                        textAlign: TextAlign.right,
+                      ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          "إذا أردت تغيير العنوان اذهب لصفحة الحساب",
+          style: TextStyle(color: Colors.grey[400], fontSize: 12),
+          textAlign: TextAlign.right,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNotesStep() {
+    return Column(
+      key: const ValueKey(1),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "ملاحظات للتوصيل",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          "اختياري — أي تعليمات خاصة للموصّل",
+          style: TextStyle(color: Colors.grey[500], fontSize: 13),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _notesController,
+          maxLines: 3,
+          maxLength: 200,
+          textAlign: TextAlign.right,
+          decoration: InputDecoration(
+            hintText: "مثال: اتصل قبل التوصيل، الطابق الثاني...",
+            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
+            filled: true,
+            fillColor: Colors.grey[50],
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: _primary, width: 1.5),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPaymentStep() {
+    final methods = [
+      {
+        'id': 'cash',
+        'label': 'كاش',
+        'icon': Icons.payments_outlined,
+        'soon': false,
+      },
+      {
+        'id': 'mada',
+        'label': 'مدى',
+        'icon': Icons.credit_card_outlined,
+        'soon': false,
+      },
+      {
+        'id': 'daftar',
+        'label': 'الدفتر',
+        'icon': Icons.book_outlined,
+        'soon': true,
+      },
+    ];
+
+    return Column(
+      key: const ValueKey(2),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "طريقة الدفع",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        const SizedBox(height: 12),
+        ...methods.map((m) {
+          final isSoon = m['soon'] as bool;
+          final isSelected = _selectedPayment == m['id'];
+          return GestureDetector(
+            onTap: isSoon
+                ? null
+                : () => setState(() => _selectedPayment = m['id'] as String),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? _primaryDark.withValues(alpha: 0.06)
+                    : Colors.grey[50],
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isSelected ? _primaryDark : Colors.grey.shade200,
+                  width: isSelected ? 1.5 : 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    m['icon'] as IconData,
+                    color: isSoon ? Colors.grey[300] : _primaryDark,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      m['label'] as String,
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        color: isSoon ? Colors.grey[400] : Colors.black87,
+                      ),
+                    ),
+                  ),
+                  if (isSoon)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        "قريباً",
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                    )
+                  else if (isSelected)
+                    const Icon(
+                      Icons.check_circle,
+                      color: _primaryDark,
+                      size: 20,
+                    ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildNavButtons() {
+    final isLastStep = _step == 2;
+    final canProceed = _step == 2 ? _selectedPayment.isNotEmpty : true;
+
+    return Row(
+      children: [
+        if (_step > 0) ...[
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () => setState(() => _step--),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: BorderSide(color: Colors.grey.shade300),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                "رجوع",
+                style: TextStyle(color: Colors.black54),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+        ],
+        Expanded(
+          flex: 2,
+          child: ElevatedButton(
+            onPressed: !canProceed || _isSending
+                ? null
+                : isLastStep
+                ? _confirm
+                : () => setState(() => _step++),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _primaryDark,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: _isSending
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : Text(
+                    isLastStep ? "إرسال الطلب 🚀" : "التالي",
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+          ),
+        ),
+      ],
     );
   }
 }

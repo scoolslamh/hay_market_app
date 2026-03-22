@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/app_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/state/providers.dart';
@@ -70,9 +71,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("تم حفظ بياناتك بنجاح، اختر حيك الآن")),
-      );
+      AppNotification.success(context, "تم حفظ بياناتك بنجاح، اختر حيك الآن");
 
       // 4. التوجه لاختيار الحي
       Navigator.pushAndRemoveUntil(
@@ -81,9 +80,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         (route) => false,
       );
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("حدث خطأ أثناء الحفظ: $e")));
+      AppNotification.error(context, "حدث خطأ أثناء الحفظ: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

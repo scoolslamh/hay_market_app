@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/app_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/state/providers.dart';
 import '../../../core/services/auth_storage.dart';
@@ -40,9 +41,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final rawPhone = phoneController.text.trim();
 
     if (rawPhone.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("الرجاء إدخال رقم الجوال")));
+      AppNotification.info(context, "الرجاء إدخال رقم الجوال");
       return;
     }
 
@@ -88,9 +87,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("حدث خطأ، حاول مرة أخرى")));
+      AppNotification.error(context, "حدث خطأ، حاول مرة أخرى");
     } finally {
       if (mounted) setState(() => isLoading = false);
     }

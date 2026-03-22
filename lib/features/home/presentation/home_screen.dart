@@ -8,6 +8,7 @@ import '../../../core/services/cart_service.dart';
 import '../../../core/models/product.dart';
 import '../../../core/state/providers.dart';
 import '../../markets/presentation/markets_screen.dart';
+import '../../../core/utils/app_notification.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -32,6 +33,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
+  // ✅ عنوان التوصيل
+  String? _deliveryAddress;
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -46,7 +50,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     Future.microtask(() {
       loadProducts();
       _loadCategories();
+      _loadDeliveryAddress();
     });
+  }
+
+  /// ✅ جلب عنوان التوصيل من addresses
+  Future<void> _loadDeliveryAddress() async {
+    try {
+      final phone = ref.read(appStateProvider).userPhone;
+      if (phone == null) return;
+
+      final data = await Supabase.instance.client
+          .from('addresses')
+          .select('address_name')
+          .eq('phone', phone)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (mounted) {
+        setState(() {
+          _deliveryAddress = data?['address_name'];
+        });
+      }
+    } catch (e) {
+      debugPrint("Load address error: $e");
+    }
   }
 
   /// ✅ جلب الأقسام من Supabase
@@ -169,23 +198,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ],
                 ),
               ),
-              // يمين: اسم المتجر
+              // يمين: عنوان التوصيل
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (appState.neighborhoodName != null)
-                    Text(
-                      "حي ${appState.neighborhoodName}",
-                      style: const TextStyle(fontSize: 11, color: Colors.grey),
-                    ),
-                  Text(
-                    appState.marketName ?? "دكان الحارة",
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: _primary,
-                    ),
+                  // السطر الأول: اسم الحي بدون إضافة كلمة "حي"
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        appState.neighborhoodName ?? "موقع التوصيل",
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(width: 3),
+                      const Icon(
+                        Icons.location_on,
+                        size: 11,
+                        color: Colors.grey,
+                      ),
+                    ],
                   ),
+                  // السطر الثاني: العنوان التفصيلي من الخريطة
+                  if (_deliveryAddress != null)
+                    SizedBox(
+                      width: 140,
+                      child: Text(
+                        _deliveryAddress!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: _primary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.end,
+                      ),
+                    )
+                  else
+                    Text(
+                      "حدد عنوانك",
+                      style: TextStyle(fontSize: 11, color: Colors.grey[400]),
+                    ),
                 ],
               ),
             ],
@@ -680,16 +737,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       GestureDetector(
                         onTap: () {
                           cartService.addToCart(product);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text("تمت إضافة ${product.name}"),
-                              duration: const Duration(milliseconds: 700),
-                              behavior: SnackBarBehavior.floating,
-                              backgroundColor: const Color(0xFF4CAF50),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
+                          AppNotification.success(
+                            context,
+                            "تمت إضافة ${product.name} للسلة",
                           );
                         },
                         child: Container(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/app_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -130,9 +131,7 @@ class _EditLocationScreenState extends ConsumerState<EditLocationScreen> {
                 final navigator = Navigator.of(context);
 
                 if (phone == null) {
-                  messenger.showSnackBar(
-                    const SnackBar(content: Text("المستخدم غير معروف")),
-                  );
+                  AppNotification.warning(context, "المستخدم غير معروف");
                   return;
                 }
 
@@ -163,23 +162,13 @@ class _EditLocationScreenState extends ConsumerState<EditLocationScreen> {
 
                   navigator.pop();
 
-                  messenger.showSnackBar(
-                    const SnackBar(
-                      content: Text("تم حفظ الموقع بنجاح"),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
+                  AppNotification.success(context, "تم حفظ الموقع بنجاح");
                 } catch (e) {
                   debugPrint("Save location error: $e");
 
                   if (!mounted) return;
 
-                  messenger.showSnackBar(
-                    const SnackBar(
-                      content: Text("حدث خطأ أثناء الحفظ"),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
+                  AppNotification.error(context, "حدث خطأ أثناء الحفظ");
                 }
               },
               child: const Text("حفظ"),
