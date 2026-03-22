@@ -437,27 +437,63 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
       unselectedItemColor: Colors.grey,
       type: BottomNavigationBarType.fixed,
       onTap: (index) => setState(() => currentIndex = index),
-      items: const [
-        BottomNavigationBarItem(
+      items: [
+        const BottomNavigationBarItem(
           icon: Icon(Icons.dashboard_outlined),
           activeIcon: Icon(Icons.dashboard),
           label: "الرئيسية",
         ),
+        // ✅ Badge على أيقونة الطلبات
         BottomNavigationBarItem(
-          icon: Icon(Icons.receipt_long_outlined),
-          activeIcon: Icon(Icons.receipt_long),
+          icon: _buildOrdersIcon(active: false),
+          activeIcon: _buildOrdersIcon(active: true),
           label: "الطلبات",
         ),
-        BottomNavigationBarItem(
+        const BottomNavigationBarItem(
           icon: Icon(Icons.inventory_2_outlined),
           activeIcon: Icon(Icons.inventory_2),
           label: "المنتجات",
         ),
-        BottomNavigationBarItem(
+        const BottomNavigationBarItem(
           icon: Icon(Icons.warehouse_outlined),
           activeIcon: Icon(Icons.warehouse),
           label: "المستودع",
         ),
+      ],
+    );
+  }
+
+  Widget _buildOrdersIcon({required bool active}) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(
+          active ? Icons.receipt_long : Icons.receipt_long_outlined,
+          color: active ? _primaryDark : Colors.grey,
+        ),
+        if (activeOrders > 0)
+          Positioned(
+            top: -4,
+            left: -4,
+            child: Container(
+              width: 18,
+              height: 18,
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  activeOrders > 9 ? '9+' : '$activeOrders',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }

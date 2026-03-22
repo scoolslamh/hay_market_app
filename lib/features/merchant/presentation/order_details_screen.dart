@@ -59,6 +59,30 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     _loadCustomerName();
   }
 
+  String _formatDateTime(String? createdAt) {
+    if (createdAt == null) return '-';
+    final dt = DateTime.tryParse(createdAt)?.toLocal();
+    if (dt == null) return '-';
+    const months = [
+      '',
+      'يناير',
+      'فبراير',
+      'مارس',
+      'أبريل',
+      'مايو',
+      'يونيو',
+      'يوليو',
+      'أغسطس',
+      'سبتمبر',
+      'أكتوبر',
+      'نوفمبر',
+      'ديسمبر',
+    ];
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '${dt.day} ${months[dt.month]} — $h:$m';
+  }
+
   Future<void> _loadCustomerName() async {
     try {
       final phone = order['phone'];
@@ -208,6 +232,13 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                   "الهاتف",
                   order['phone'] ?? '-',
                 ),
+                // ✅ وقت الطلب
+                if (order['created_at'] != null)
+                  _buildInfoRow(
+                    Icons.access_time_outlined,
+                    "وقت الطلب",
+                    _formatDateTime(order['created_at']),
+                  ),
                 if (order['address'] != null &&
                     order['address'].toString().isNotEmpty)
                   _buildInfoRow(

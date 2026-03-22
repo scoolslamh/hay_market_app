@@ -144,7 +144,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             children: [
               Image.asset(
                 "assets/logo.png",
-                width: 60,
+                width: 130,
                 errorBuilder: (context, error, stackTrace) {
                   return const Icon(Icons.store, size: 80, color: Colors.green);
                 },

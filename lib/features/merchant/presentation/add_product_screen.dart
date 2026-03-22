@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../../core/utils/app_notification.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -15,128 +14,25 @@ class AddProductScreen extends StatefulWidget {
 }
 
 class _AddProductScreenState extends State<AddProductScreen> {
-  final supabase = Supabase.instance.client;
+  static const Color _primary = Color(0xFF4CAF50);
+  static const Color _primaryDark = Color(0xFF004D40);
 
+  final supabase = Supabase.instance.client;
   final nameController = TextEditingController();
   final priceController = TextEditingController();
 
   File? imageFile;
   String? imageUrl;
-
   bool isLoading = false;
-  double uploadProgress = 0;
+  bool isUploadingImage = false;
 
   @override
   void initState() {
     super.initState();
-
     if (widget.product != null) {
-      nameController.text = widget.product!['name'] ?? "";
-      priceController.text = widget.product!['price']?.toString() ?? "";
+      nameController.text = widget.product!['name'] ?? '';
+      priceController.text = widget.product!['price']?.toString() ?? '';
       imageUrl = widget.product!['image_url'];
-    }
-  }
-
-  /// 📸 اختيار صورة
-  Future<void> pickImage() async {
-    try {
-      final picked = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 60,
-        maxWidth: 800,
-      );
-
-      if (picked != null) {
-        setState(() {
-          imageFile = File(picked.path);
-        });
-      }
-    } catch (e) {
-      debugPrint("Pick image error: $e");
-    }
-  }
-
-  /// ☁️ رفع الصورة
-  Future<String?> uploadImage() async {
-    try {
-      if (imageFile == null) return imageUrl;
-
-      setState(() => uploadProgress = 0.2);
-
-      final fileName = "product_${DateTime.now().millisecondsSinceEpoch}.jpg";
-
-      final path = "${widget.marketId}/$fileName";
-
-      await supabase.storage.from('products').upload(path, imageFile!);
-
-      setState(() => uploadProgress = 0.9);
-
-      final publicUrl = supabase.storage.from('products').getPublicUrl(path);
-
-      debugPrint("✅ IMAGE UPLOADED: $publicUrl");
-
-      return publicUrl;
-    } catch (e) {
-      debugPrint("🔥 UPLOAD ERROR: $e");
-
-      if (!mounted) return null;
-      AppNotification.error(context, "خطأ رفع الصورة: $e");
-
-      return null;
-    }
-  }
-
-  /// 💾 حفظ المنتج
-  Future<void> saveProduct() async {
-    final name = nameController.text.trim();
-    final price = double.tryParse(priceController.text.trim());
-
-    if (name.isEmpty || price == null) {
-      AppNotification.warning(context, "تحقق من البيانات");
-      return;
-    }
-
-    try {
-      setState(() {
-        isLoading = true;
-        uploadProgress = 0.1;
-      });
-
-      debugPrint("📦 MARKET ID: ${widget.marketId}");
-
-      final uploadedImage = await uploadImage();
-
-      debugPrint("🖼️ IMAGE URL: $uploadedImage");
-
-      /// 🔥 مهم: لا نخليها null
-      final imageToSave = uploadedImage ?? imageUrl ?? "";
-
-      if (widget.product == null) {
-        await supabase.from('products').insert({
-          "name": name,
-          "price": price,
-          "market_id": widget.marketId,
-          "image_url": imageToSave,
-        });
-      } else {
-        await supabase
-            .from('products')
-            .update({"name": name, "price": price, "image_url": imageToSave})
-            .eq('id', widget.product!['id']);
-      }
-
-      if (!mounted) return;
-
-      Navigator.pop(context);
-    } catch (e) {
-      debugPrint("🔥 SAVE ERROR: $e");
-
-      AppNotification.error(context, "خطأ: $e");
-    } finally {
-      setState(() {
-        isLoading = false;
-        uploadProgress = 0;
-      });
     }
   }
 
@@ -147,89 +43,329 @@ class _AddProductScreenState extends State<AddProductScreen> {
     super.dispose();
   }
 
+  Future<void> pickImage() async {
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 70,
+        maxWidth: 800,
+      );
+      if (picked != null) setState(() => imageFile = File(picked.path));
+    } catch (e) {
+      debugPrint("Pick image error: $e");
+    }
+  }
+
+  Future<String?> uploadImage() async {
+    if (imageFile == null) return imageUrl;
+
+    setState(() => isUploadingImage = true);
+
+    try {
+      final fileName = "product_${DateTime.now().millisecondsSinceEpoch}.jpg";
+      final path = "${widget.marketId}/$fileName";
+      final bytes = await imageFile!.readAsBytes();
+
+      // ✅ uploadBinary أكثر استقراراً
+      await supabase.storage
+          .from('products')
+          .uploadBinary(
+            path,
+            bytes,
+            fileOptions: const FileOptions(
+              upsert: true,
+              contentType: 'image/jpeg',
+            ),
+          );
+
+      final publicUrl = supabase.storage.from('products').getPublicUrl(path);
+      return publicUrl;
+    } catch (e) {
+      debugPrint("Upload error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("فشل رفع الصورة — سيتم الحفظ بدونها"),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+      // ✅ لا نخرج — نرجع الصورة القديمة
+      return imageUrl;
+    } finally {
+      if (mounted) setState(() => isUploadingImage = false);
+    }
+  }
+
+  Future<void> saveProduct() async {
+    final name = nameController.text.trim();
+    final price = double.tryParse(priceController.text.trim());
+
+    if (name.isEmpty || price == null || price <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("تأكد من إدخال الاسم والسعر بشكل صحيح"),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    setState(() => isLoading = true);
+
+    try {
+      final uploadedImage = await uploadImage();
+      final imageToSave = uploadedImage ?? '';
+
+      if (widget.product == null) {
+        await supabase.from('products').insert({
+          "name": name,
+          "price": price,
+          "market_id": widget.marketId,
+          "image_url": imageToSave,
+          "stock": 10,
+        });
+      } else {
+        await supabase
+            .from('products')
+            .update({"name": name, "price": price, "image_url": imageToSave})
+            .eq('id', widget.product!['id']);
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.product == null ? "✅ تمت إضافة المنتج" : "✅ تم تحديث المنتج",
+          ),
+          backgroundColor: _primary,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+
+      Navigator.pop(context);
+    } catch (e) {
+      debugPrint("Save error: $e");
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("حدث خطأ: $e"),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.product != null;
 
     return Scaffold(
-      appBar: AppBar(title: Text(isEdit ? "تعديل المنتج" : "إضافة منتج")),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: ListView(
-          children: [
-            /// 🖼️ الصورة
-            GestureDetector(
-              onTap: isLoading ? null : pickImage,
-              child: Stack(
-                children: [
-                  Container(
-                    height: 160,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(15),
-                      color: Colors.grey[200],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(15),
-                      child: imageFile != null
-                          ? Image.file(imageFile!, fit: BoxFit.cover)
-                          : imageUrl != null
-                          ? Image.network(imageUrl!, fit: BoxFit.cover)
-                          : const Center(
-                              child: Icon(Icons.camera_alt, size: 40),
-                            ),
-                    ),
-                  ),
-
-                  if (isLoading)
-                    Container(
-                      height: 160,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(15),
-                        color: Colors.black45,
-                      ),
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          value: uploadProgress,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(
-                labelText: "اسم المنتج",
-                border: OutlineInputBorder(),
-              ),
-            ),
-
-            const SizedBox(height: 15),
-
-            TextField(
-              controller: priceController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "السعر",
-                border: OutlineInputBorder(),
-              ),
-            ),
-
-            const SizedBox(height: 30),
-
-            ElevatedButton(
-              onPressed: isLoading ? null : saveProduct,
-              child: isLoading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : Text(isEdit ? "تحديث المنتج" : "إضافة المنتج"),
-            ),
-          ],
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          isEdit ? "تعديل المنتج" : "إضافة منتج",
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: Colors.black87,
+          ),
         ),
       ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // ── الصورة ──
+          GestureDetector(
+            onTap: isLoading ? null : pickImage,
+            child: Container(
+              height: 180,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color:
+                      imageFile != null ||
+                          (imageUrl != null && imageUrl!.isNotEmpty)
+                      ? _primary
+                      : Colors.grey.shade200,
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: isUploadingImage
+                    ? const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 10),
+                            Text("جاري رفع الصورة..."),
+                          ],
+                        ),
+                      )
+                    : imageFile != null
+                    ? Image.file(
+                        imageFile!,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                      )
+                    : imageUrl != null && imageUrl!.isNotEmpty
+                    ? Image.network(
+                        imageUrl!,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                      )
+                    : _buildPlaceholder(),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 6),
+          Center(
+            child: Text(
+              "اضغط لاختيار صورة",
+              style: TextStyle(color: Colors.grey[400], fontSize: 12),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── اسم المنتج ──
+          TextField(
+            controller: nameController,
+            textAlign: TextAlign.right,
+            decoration: InputDecoration(
+              labelText: "اسم المنتج",
+              prefixIcon: const Icon(
+                Icons.inventory_2_outlined,
+                color: _primaryDark,
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: Colors.grey.shade200),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: Colors.grey.shade200),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: _primary, width: 1.5),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // ── السعر ──
+          TextField(
+            controller: priceController,
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.right,
+            decoration: InputDecoration(
+              labelText: "السعر ﷼",
+              prefixIcon: const Icon(
+                Icons.payments_outlined,
+                color: _primaryDark,
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: Colors.grey.shade200),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: Colors.grey.shade200),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: _primary, width: 1.5),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 30),
+
+          // ── زر الحفظ ──
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryDark,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              onPressed: isLoading ? null : saveProduct,
+              child: isLoading
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : Text(
+                      isEdit ? "تحديث المنتج" : "إضافة المنتج",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.add_photo_alternate_outlined,
+          size: 48,
+          color: Colors.grey[400],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          "اضغط لإضافة صورة",
+          style: TextStyle(color: Colors.grey[500], fontSize: 13),
+        ),
+      ],
     );
   }
 }
