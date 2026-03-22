@@ -60,7 +60,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     _loadCustomerName();
   }
 
-  String _formatDateTime(String? createdAt) {
+  // ✅ نظام 12 ساعة مع فصل التاريخ والوقت
+  String _formatDate(String? createdAt) {
     if (createdAt == null) return '-';
     final dt = DateTime.tryParse(createdAt)?.toLocal();
     if (dt == null) return '-';
@@ -79,9 +80,18 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       'نوفمبر',
       'ديسمبر',
     ];
-    final h = dt.hour.toString().padLeft(2, '0');
-    final m = dt.minute.toString().padLeft(2, '0');
-    return '${dt.day} ${months[dt.month]} — $h:$m';
+    return '${dt.day} ${months[dt.month]} ${dt.year}';
+  }
+
+  String _formatTime(String? createdAt) {
+    if (createdAt == null) return '-';
+    final dt = DateTime.tryParse(createdAt)?.toLocal();
+    if (dt == null) return '-';
+    final hour = dt.hour;
+    final minute = dt.minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'م' : 'ص';
+    final hour12 = hour % 12 == 0 ? 12 : hour % 12;
+    return '$hour12:$minute $period';
   }
 
   Future<void> _loadCustomerName() async {
@@ -174,11 +184,107 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     }
   }
 
-  Future<void> _callCustomer() async {
+  // ✅ خيار الاتصال أو واتساب
+  void _contactCustomer() {
     final phone = order['phone'] ?? '';
-    final url = Uri.parse('tel:$phone');
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              phone,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 16),
+            // اتصال
+            ListTile(
+              onTap: () async {
+                Navigator.pop(context);
+                final url = Uri.parse('tel:$phone');
+                if (await canLaunchUrl(url)) launchUrl(url);
+              },
+              leading: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.call, color: Colors.green),
+              ),
+              title: const Text(
+                "اتصال",
+                textAlign: TextAlign.right,
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            // واتساب
+            ListTile(
+              onTap: () async {
+                Navigator.pop(context);
+                final url = Uri.parse('https://wa.me/$phone');
+                if (await canLaunchUrl(url)) {
+                  launchUrl(url, mode: LaunchMode.externalApplication);
+                }
+              },
+              leading: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF25D366).withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.chat, color: Color(0xFF25D366)),
+              ),
+              title: const Text(
+                "واتساب",
+                textAlign: TextAlign.right,
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ✅ فتح الموقع في الخريطة
+  Future<void> _openMap() async {
+    final lat = order['address_lat'];
+    final lng = order['address_lng'];
+    if (lat == null || lng == null) {
+      AppNotification.warning(context, "لا يوجد موقع محدد لهذا الطلب");
+      return;
+    }
+    final url = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
+    );
     if (await canLaunchUrl(url)) {
-      await launchUrl(url);
+      launchUrl(url, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -205,10 +311,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         ),
         centerTitle: true,
         actions: [
-          // زر اتصال
           IconButton(
             icon: const Icon(Icons.phone_outlined, color: _primaryDark),
-            onPressed: _callCustomer,
+            onPressed: _contactCustomer,
           ),
         ],
       ),
@@ -222,24 +327,46 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               children: [
                 if (customerName != null && customerName!.isNotEmpty)
                   _buildInfoRow(Icons.person_outline, "الاسم", customerName!),
-                _buildInfoRow(
-                  Icons.phone_outlined,
-                  "الهاتف",
-                  order['phone'] ?? '-',
+
+                // ✅ رقم الهاتف قابل للضغط
+                _buildTappableRow(
+                  icon: Icons.phone_outlined,
+                  label: "الهاتف",
+                  value: order['phone'] ?? '-',
+                  onTap: _contactCustomer,
+                  color: Colors.green,
                 ),
-                // ✅ وقت الطلب
-                if (order['created_at'] != null)
+
+                // ✅ التاريخ والوقت منفصلان بنظام 12 ساعة
+                if (order['created_at'] != null) ...[
+                  _buildInfoRow(
+                    Icons.calendar_today_outlined,
+                    "تاريخ الطلب",
+                    _formatDate(order['created_at']),
+                  ),
                   _buildInfoRow(
                     Icons.access_time_outlined,
                     "وقت الطلب",
-                    _formatDateTime(order['created_at']),
+                    _formatTime(order['created_at']),
                   ),
+                ],
+
+                // ✅ العنوان قابل للضغط يفتح الخريطة
                 if (order['address'] != null &&
                     order['address'].toString().isNotEmpty)
-                  _buildInfoRow(
-                    Icons.location_on_outlined,
-                    "العنوان",
-                    order['address'],
+                  _buildTappableRow(
+                    icon: Icons.location_on_outlined,
+                    label: "العنوان",
+                    value: order['address'],
+                    onTap: _openMap,
+                    color: Colors.red,
+                    trailing: order['address_lat'] != null
+                        ? const Icon(
+                            Icons.map_outlined,
+                            size: 16,
+                            color: Colors.blue,
+                          )
+                        : null,
                   ),
                 if (order['customer_notes'] != null &&
                     order['customer_notes'].toString().isNotEmpty)
@@ -702,6 +829,73 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           Divider(height: 1, color: Colors.grey[100]),
           Padding(padding: const EdgeInsets.all(14), child: child),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTappableRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+    Color color = const Color(0xFF004D40),
+    Widget? trailing,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "اضغط للتواصل",
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 3),
+                  Icon(Icons.touch_app, color: color, size: 12),
+                ],
+              ),
+            ),
+            if (trailing != null) ...[const SizedBox(width: 4), trailing],
+            const Spacer(),
+            Expanded(
+              flex: 3,
+              child: Text(
+                value,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.underline,
+                  decorationColor: color,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(color: Colors.grey[500], fontSize: 13),
+            ),
+            const SizedBox(width: 8),
+            Icon(icon, color: const Color(0xFF004D40), size: 18),
+          ],
+        ),
       ),
     );
   }
