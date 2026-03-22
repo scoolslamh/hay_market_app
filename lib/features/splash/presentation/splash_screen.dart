@@ -146,8 +146,22 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 "assets/logo.png",
                 width: 60,
                 errorBuilder: (context, error, stackTrace) {
-                  return const Icon(Icons.store, size: 50, color: Colors.green);
+                  return const Icon(Icons.store, size: 80, color: Colors.green);
                 },
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                "تموينات الحي",
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "سوق حارتكم في جوالك",
+                style: TextStyle(color: Colors.grey, fontSize: 16),
               ),
             ],
           ),
