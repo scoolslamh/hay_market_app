@@ -29,10 +29,44 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   int totalProducts = 0;
   bool loadingStats = true;
 
+  // ✅ Realtime
+  RealtimeChannel? _realtimeChannel;
+
   @override
   void initState() {
     super.initState();
     _loadMarketAndStats();
+  }
+
+  @override
+  void dispose() {
+    if (_realtimeChannel != null) {
+      Supabase.instance.client.removeChannel(_realtimeChannel!);
+    }
+    super.dispose();
+  }
+
+  // ✅ تفعيل Realtime بعد معرفة marketId
+  void _setupRealtime() {
+    if (marketId == null) return;
+    _realtimeChannel?.unsubscribe();
+    _realtimeChannel = Supabase.instance.client
+        .channel('dashboard_$marketId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'orders',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'market_id',
+            value: marketId!,
+          ),
+          callback: (_) {
+            // ✅ تحديث فوري للإحصائيات عند أي تغيير
+            if (mounted) _loadMarketAndStats();
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _loadMarketAndStats() async {
@@ -87,6 +121,8 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
           totalProducts = products.length;
           loadingStats = false;
         });
+        // ✅ تفعيل Realtime بعد معرفة marketId
+        if (_realtimeChannel == null) _setupRealtime();
       }
     } catch (e) {
       debugPrint("Stats error: $e");
