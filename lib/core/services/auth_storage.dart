@@ -96,6 +96,9 @@ class AuthStorage {
     await prefs.remove(_marketIdKey);
     await prefs.remove(_neighborhoodNameKey);
     await prefs.remove(_marketNameKey);
+
+    // ✅ مسح السلة المحفوظة عند تسجيل الخروج
+    await prefs.remove('cart_items');
   }
 
   /// =========================

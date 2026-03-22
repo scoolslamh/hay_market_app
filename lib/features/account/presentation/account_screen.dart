@@ -843,6 +843,8 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
         onTap: () async {
           final navigator = Navigator.of(context);
           await AuthStorage().logout();
+          // ✅ إعادة تهيئة AppState لمسح بيانات الجلسة
+          ref.read(appStateProvider.notifier).reset();
           if (!mounted) return;
           navigator.pushAndRemoveUntil(
             MaterialPageRoute(builder: (_) => const LoginScreen()),

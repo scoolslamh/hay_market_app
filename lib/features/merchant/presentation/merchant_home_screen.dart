@@ -129,6 +129,8 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                   onTap: () async {
                     final navigator = Navigator.of(context);
                     await AuthStorage().logout();
+                    // ✅ تسجيل خروج من Supabase لمسح الجلسة كاملاً
+                    await Supabase.instance.client.auth.signOut();
                     if (!mounted) return;
                     navigator.pushAndRemoveUntil(
                       MaterialPageRoute(builder: (_) => const LoginScreen()),
