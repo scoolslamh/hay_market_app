@@ -142,8 +142,64 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         context,
         "✅ تم التحديث: ${_stages[currentIdx + 1]['label']}",
       );
+
+      // ✅ عند التوصيل + الدفع بالدفتر — أضف للرصيد
+      if (nextStatus == 'delivered' && order['payment_method'] == 'daftar') {
+        await _addToDaftar();
+      }
     } catch (e) {
       debugPrint("Update error: $e");
+    }
+  }
+
+  // ✅ إضافة مبلغ الطلب لرصيد الدفتر عند التوصيل
+  Future<void> _addToDaftar() async {
+    try {
+      final phone = order['phone'];
+      final amount = (order['total'] as num?)?.toDouble() ?? 0;
+      if (phone == null || amount <= 0) return;
+
+      // جلب الدفتر
+      final daftar = await supabase
+          .from('daftar')
+          .select()
+          .eq('customer_phone', phone)
+          .eq('status', 'approved')
+          .maybeSingle();
+
+      if (daftar == null) return;
+
+      final currentBalance =
+          (daftar['current_balance'] as num?)?.toDouble() ?? 0;
+      final newBalance = currentBalance + amount;
+      final limit = (daftar['credit_limit'] as num?)?.toDouble() ?? 300;
+
+      // تحديث الرصيد
+      await supabase
+          .from('daftar')
+          .update({'current_balance': newBalance})
+          .eq('id', daftar['id']);
+
+      // تسجيل المعاملة
+      await supabase.from('daftar_transactions').insert({
+        'daftar_id': daftar['id'],
+        'order_id': order['id'],
+        'amount': amount,
+        'type': 'order',
+        'note': 'طلب #${order['id'].toString().substring(0, 8).toUpperCase()}',
+      });
+
+      debugPrint("✅ تم إضافة $amount ﷼ لدفتر $phone");
+
+      // تنبيه إذا اقترب من الحد
+      if (mounted && newBalance / limit >= 0.8) {
+        AppNotification.warning(
+          context,
+          "⚠️ العميل اقترب من حد الدفتر (${(newBalance / limit * 100).toInt()}%)",
+        );
+      }
+    } catch (e) {
+      debugPrint("Daftar update error: $e");
     }
   }
 

@@ -14,6 +14,7 @@ import '../../auth/presentation/login_screen.dart';
 import '../../auth/presentation/map_picker_screen.dart';
 import '../../orders/presentation/orders_screen.dart';
 import '../../location/presentation/edit_location_screen.dart';
+import '../../daftar/presentation/daftar_screen.dart';
 
 class AccountScreen extends ConsumerStatefulWidget {
   const AccountScreen({super.key});
@@ -668,6 +669,16 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       ),
       child: Column(
         children: [
+          _buildTile(
+            icon: Icons.book_outlined,
+            title: "دفتري 📒",
+            subtitle: "دفتر البقالة الرقمي",
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const DaftarScreen()),
+            ),
+          ),
+          _buildDivider(),
           _buildTile(
             icon: Icons.shopping_bag_outlined,
             title: "طلباتي",

@@ -5,6 +5,7 @@ import '../../auth/presentation/login_screen.dart';
 import 'merchant_orders_screen.dart';
 import 'merchant_products_screen.dart';
 import 'warehouse_screen.dart';
+import 'daftar_management_screen.dart';
 
 class MerchantHomeScreen extends StatefulWidget {
   const MerchantHomeScreen({super.key});
@@ -140,7 +141,9 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
           ? const MerchantOrdersScreen()
           : currentIndex == 2
           ? const MerchantProductsScreen()
-          : const WarehouseScreen(),
+          : currentIndex == 3
+          ? const WarehouseScreen()
+          : const DaftarManagementScreen(),
       bottomNavigationBar: _buildBottomNav(),
     );
   }
@@ -496,6 +499,11 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
           icon: Icon(Icons.warehouse_outlined),
           activeIcon: Icon(Icons.warehouse),
           label: "المستودع",
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.book_outlined),
+          activeIcon: Icon(Icons.book),
+          label: "الدفتر",
         ),
       ],
     );

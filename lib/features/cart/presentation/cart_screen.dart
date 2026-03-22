@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/services/order_service.dart';
 import '../../../core/services/cart_service.dart';
@@ -503,6 +504,10 @@ class _OrderFlowSheetState extends State<_OrderFlowSheet> {
   String? _address;
   bool _loadingAddress = true;
 
+  // ✅ بيانات الدفتر
+  Map<String, dynamic>? _daftar;
+  bool _loadingDaftar = true;
+
   static const Color _primary = Color(0xFF4CAF50);
   static const Color _primaryDark = Color(0xFF004D40);
 
@@ -510,12 +515,38 @@ class _OrderFlowSheetState extends State<_OrderFlowSheet> {
   void initState() {
     super.initState();
     _loadAddress();
+    _loadDaftar();
   }
 
   @override
   void dispose() {
     _notesController.dispose();
     super.dispose();
+  }
+
+  // ✅ جلب بيانات الدفتر
+  Future<void> _loadDaftar() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final phone = prefs.getString('user_phone');
+      if (phone == null) {
+        setState(() => _loadingDaftar = false);
+        return;
+      }
+      final data = await Supabase.instance.client
+          .from('daftar')
+          .select()
+          .eq('customer_phone', phone)
+          .maybeSingle();
+      if (mounted) {
+        setState(() {
+          _daftar = data;
+          _loadingDaftar = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _loadingDaftar = false);
+    }
   }
 
   Future<void> _loadAddress() async {
@@ -776,24 +807,37 @@ class _OrderFlowSheetState extends State<_OrderFlowSheet> {
   }
 
   Widget _buildPaymentStep() {
+    final daftarStatus = _daftar?['status'];
+    final daftarBalance =
+        (_daftar?['current_balance'] as num?)?.toDouble() ?? 0;
+    final daftarLimit = (_daftar?['credit_limit'] as num?)?.toDouble() ?? 0;
+    final orderTotal = widget.cartService.total;
+    final daftarAvailable = daftarLimit - daftarBalance;
+    final canUseDaftar =
+        daftarStatus == 'approved' &&
+        (daftarBalance + orderTotal) <= daftarLimit;
+
     final methods = [
       {
         'id': 'cash',
         'label': 'كاش',
         'icon': Icons.payments_outlined,
         'soon': false,
+        'disabled': false,
       },
       {
         'id': 'mada',
         'label': 'مدى',
         'icon': Icons.credit_card_outlined,
         'soon': false,
+        'disabled': false,
       },
       {
         'id': 'daftar',
         'label': 'الدفتر',
         'icon': Icons.book_outlined,
-        'soon': true,
+        'soon': false,
+        'disabled': _daftar == null || !canUseDaftar,
       },
     ];
 
@@ -806,11 +850,93 @@ class _OrderFlowSheetState extends State<_OrderFlowSheet> {
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
         const SizedBox(height: 12),
+
+        // ✅ حالة الدفتر
+        if (_loadingDaftar)
+          const Center(child: CircularProgressIndicator())
+        else if (_daftar == null)
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  "لا يوجد دفتر مفعّل — يمكن التقديم من صفحة الحساب",
+                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                  textAlign: TextAlign.right,
+                ),
+                SizedBox(width: 6),
+                Icon(Icons.info_outline, color: Colors.grey, size: 16),
+              ],
+            ),
+          )
+        else if (daftarStatus == 'approved')
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1565C0).withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFF1565C0).withValues(alpha: 0.2),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  canUseDaftar
+                      ? "متاح: ${daftarAvailable.toStringAsFixed(1)} ﷼"
+                      : "تجاوز الحد ❌",
+                  style: TextStyle(
+                    color: canUseDaftar ? const Color(0xFF1565C0) : Colors.red,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                const Text(
+                  "📒 رصيد الدفتر",
+                  style: TextStyle(color: Color(0xFF1565C0), fontSize: 12),
+                ),
+              ],
+            ),
+          )
+        else if (daftarStatus == 'frozen')
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  "دفترك مجمد — تواصل مع التاجر",
+                  style: TextStyle(color: Colors.blue, fontSize: 12),
+                ),
+                SizedBox(width: 6),
+                Icon(Icons.ac_unit, color: Colors.blue, size: 16),
+              ],
+            ),
+          ),
+
         ...methods.map((m) {
           final isSoon = m['soon'] as bool;
+          final isDisabled = m['disabled'] as bool;
           final isSelected = _selectedPayment == m['id'];
+          final isDaftar = m['id'] == 'daftar';
+
           return GestureDetector(
-            onTap: isSoon
+            onTap: (isSoon || isDisabled)
                 ? null
                 : () => setState(() => _selectedPayment = m['id'] as String),
             child: AnimatedContainer(
@@ -819,11 +945,17 @@ class _OrderFlowSheetState extends State<_OrderFlowSheet> {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? _primaryDark.withValues(alpha: 0.06)
+                    ? (isDaftar
+                          ? const Color(0xFF1565C0).withValues(alpha: 0.06)
+                          : _primaryDark.withValues(alpha: 0.06))
+                    : isDisabled
+                    ? Colors.grey[50]
                     : Colors.grey[50],
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: isSelected ? _primaryDark : Colors.grey.shade200,
+                  color: isSelected
+                      ? (isDaftar ? const Color(0xFF1565C0) : _primaryDark)
+                      : Colors.grey.shade200,
                   width: isSelected ? 1.5 : 1,
                 ),
               ),
@@ -831,7 +963,11 @@ class _OrderFlowSheetState extends State<_OrderFlowSheet> {
                 children: [
                   Icon(
                     m['icon'] as IconData,
-                    color: isSoon ? Colors.grey[300] : _primaryDark,
+                    color: isDisabled
+                        ? Colors.grey[300]
+                        : isDaftar
+                        ? const Color(0xFF1565C0)
+                        : _primaryDark,
                     size: 22,
                   ),
                   const SizedBox(width: 12),
@@ -842,11 +978,26 @@ class _OrderFlowSheetState extends State<_OrderFlowSheet> {
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 15,
-                        color: isSoon ? Colors.grey[400] : Colors.black87,
+                        color: isDisabled ? Colors.grey[400] : Colors.black87,
                       ),
                     ),
                   ),
-                  if (isSoon)
+                  if (isDisabled && isDaftar && _daftar != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        "تجاوز الحد",
+                        style: TextStyle(fontSize: 11, color: Colors.red),
+                      ),
+                    )
+                  else if (isDisabled)
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
@@ -857,14 +1008,14 @@ class _OrderFlowSheetState extends State<_OrderFlowSheet> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text(
-                        "قريباً",
+                        "غير متاح",
                         style: TextStyle(fontSize: 11, color: Colors.grey),
                       ),
                     )
                   else if (isSelected)
-                    const Icon(
+                    Icon(
                       Icons.check_circle,
-                      color: _primaryDark,
+                      color: isDaftar ? const Color(0xFF1565C0) : _primaryDark,
                       size: 20,
                     ),
                 ],

@@ -98,13 +98,59 @@ class OrderService extends ChangeNotifier {
           })
           .timeout(const Duration(seconds: 10));
 
+      final orderTotal = cart.total; // ✅ نحفظ قبل clearCart
       _increase();
       cart.clearCart();
+
+      // ✅ الدفتر يُضاف عند التوصيل فقط — ليس هنا
     } on TimeoutException {
       throw Exception("انتهت مهلة الاتصال بالخادم");
     } catch (e) {
       debugPrint("Create order error: $e");
       rethrow;
+    }
+  }
+
+  /// ✅ إضافة مبلغ الطلب لرصيد الدفتر
+  Future<void> _addToDaftar(String phone, double amount) async {
+    try {
+      // جلب الدفتر
+      final daftar = await supabase
+          .from('daftar')
+          .select()
+          .eq('customer_phone', phone)
+          .eq('status', 'approved')
+          .maybeSingle();
+
+      if (daftar == null) return;
+
+      final currentBalance =
+          (daftar['current_balance'] as num?)?.toDouble() ?? 0;
+      final newBalance = currentBalance + amount;
+      final limit = (daftar['credit_limit'] as num?)?.toDouble() ?? 300;
+
+      // تحديث الرصيد
+      await supabase
+          .from('daftar')
+          .update({'current_balance': newBalance})
+          .eq('id', daftar['id']);
+
+      // تسجيل المعاملة
+      await supabase.from('daftar_transactions').insert({
+        'daftar_id': daftar['id'],
+        'amount': amount,
+        'type': 'order',
+        'note': 'طلب بالدفتر',
+      });
+
+      // ✅ تنبيه إذا اقترب من الحد (80%)
+      if (newBalance / limit >= 0.8) {
+        debugPrint(
+          "⚠️ تنبيه: رصيد الدفتر وصل ${(newBalance / limit * 100).toInt()}%",
+        );
+      }
+    } catch (e) {
+      debugPrint("Daftar update error: $e");
     }
   }
 
