@@ -810,12 +810,14 @@ class _OrderFlowSheetState extends State<_OrderFlowSheet> {
     final daftarStatus = _daftar?['status'];
     final daftarBalance =
         (_daftar?['current_balance'] as num?)?.toDouble() ?? 0;
+    final daftarReserved =
+        (_daftar?['reserved_balance'] as num?)?.toDouble() ?? 0;
     final daftarLimit = (_daftar?['credit_limit'] as num?)?.toDouble() ?? 0;
     final orderTotal = widget.cartService.total;
-    final daftarAvailable = daftarLimit - daftarBalance;
+    // ✅ الرصيد المتاح = الحد - (الفعلي + المحجوز)
+    final daftarAvailable = daftarLimit - daftarBalance - daftarReserved;
     final canUseDaftar =
-        daftarStatus == 'approved' &&
-        (daftarBalance + orderTotal) <= daftarLimit;
+        daftarStatus == 'approved' && orderTotal <= daftarAvailable;
 
     final methods = [
       {

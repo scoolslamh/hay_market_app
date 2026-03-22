@@ -98,11 +98,14 @@ class OrderService extends ChangeNotifier {
           })
           .timeout(const Duration(seconds: 10));
 
-      final orderTotal = cart.total; // ✅ نحفظ قبل clearCart
+      final orderTotal = cart.total;
       _increase();
       cart.clearCart();
 
-      // ✅ الدفتر يُضاف عند التوصيل فقط — ليس هنا
+      // ✅ إذا الدفع بالدفتر — احجز المبلغ فوراً
+      if (paymentMethod == 'daftar') {
+        await _reserveInDaftar(phone, orderTotal);
+      }
     } on TimeoutException {
       throw Exception("انتهت مهلة الاتصال بالخادم");
     } catch (e) {
@@ -111,10 +114,38 @@ class OrderService extends ChangeNotifier {
     }
   }
 
-  /// ✅ إضافة مبلغ الطلب لرصيد الدفتر
-  Future<void> _addToDaftar(String phone, double amount) async {
+  /// ✅ حجز المبلغ في الدفتر عند إرسال الطلب
+  Future<void> _reserveInDaftar(String phone, double amount) async {
     try {
-      // جلب الدفتر
+      final daftar = await supabase
+          .from('daftar')
+          .select()
+          .eq('customer_phone', phone)
+          .eq('status', 'approved')
+          .maybeSingle();
+
+      if (daftar == null) return;
+
+      final reserved = (daftar['reserved_balance'] as num?)?.toDouble() ?? 0;
+
+      await supabase
+          .from('daftar')
+          .update({'reserved_balance': reserved + amount})
+          .eq('id', daftar['id']);
+
+      debugPrint("✅ تم حجز $amount ﷼ في دفتر $phone");
+    } catch (e) {
+      debugPrint("Reserve daftar error: $e");
+    }
+  }
+
+  /// ✅ تأكيد المبلغ عند التوصيل (محجوز → فعلي)
+  Future<void> confirmDaftarPayment(
+    String phone,
+    double amount,
+    String orderId,
+  ) async {
+    try {
       final daftar = await supabase
           .from('daftar')
           .select()
@@ -126,31 +157,64 @@ class OrderService extends ChangeNotifier {
 
       final currentBalance =
           (daftar['current_balance'] as num?)?.toDouble() ?? 0;
-      final newBalance = currentBalance + amount;
+      final reserved = (daftar['reserved_balance'] as num?)?.toDouble() ?? 0;
       final limit = (daftar['credit_limit'] as num?)?.toDouble() ?? 300;
 
-      // تحديث الرصيد
+      // نقل من محجوز لفعلي
       await supabase
           .from('daftar')
-          .update({'current_balance': newBalance})
+          .update({
+            'current_balance': currentBalance + amount,
+            'reserved_balance': (reserved - amount).clamp(0, double.infinity),
+          })
           .eq('id', daftar['id']);
 
       // تسجيل المعاملة
       await supabase.from('daftar_transactions').insert({
         'daftar_id': daftar['id'],
+        'order_id': orderId,
         'amount': amount,
         'type': 'order',
-        'note': 'طلب بالدفتر',
+        'note': 'طلب #${orderId.substring(0, 8).toUpperCase()} — تم التوصيل',
       });
 
-      // ✅ تنبيه إذا اقترب من الحد (80%)
+      debugPrint("✅ تم تأكيد $amount ﷼ في دفتر $phone");
+
+      // إذا تجاوز 80% من الحد — تنبيه
+      final newBalance = currentBalance + amount;
       if (newBalance / limit >= 0.8) {
         debugPrint(
-          "⚠️ تنبيه: رصيد الدفتر وصل ${(newBalance / limit * 100).toInt()}%",
+          "⚠️ العميل وصل ${(newBalance / limit * 100).toInt()}% من حده",
         );
       }
     } catch (e) {
-      debugPrint("Daftar update error: $e");
+      debugPrint("Confirm daftar error: $e");
+    }
+  }
+
+  /// ✅ تحرير المحجوز عند الإلغاء
+  Future<void> releaseDaftarReservation(String phone, double amount) async {
+    try {
+      final daftar = await supabase
+          .from('daftar')
+          .select()
+          .eq('customer_phone', phone)
+          .maybeSingle();
+
+      if (daftar == null) return;
+
+      final reserved = (daftar['reserved_balance'] as num?)?.toDouble() ?? 0;
+
+      await supabase
+          .from('daftar')
+          .update({
+            'reserved_balance': (reserved - amount).clamp(0, double.infinity),
+          })
+          .eq('id', daftar['id']);
+
+      debugPrint("✅ تم تحرير $amount ﷼ من محجوز دفتر $phone");
+    } catch (e) {
+      debugPrint("Release daftar error: $e");
     }
   }
 

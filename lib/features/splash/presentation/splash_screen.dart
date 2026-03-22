@@ -10,6 +10,8 @@ import '../../auth/presentation/register_screen.dart';
 import '../../location/presentation/neighborhood_screen.dart';
 import '../../../core/navigation/main_navigation.dart';
 import '../../merchant/presentation/merchant_home_screen.dart';
+import '../../merchant/presentation/merchant_pending_screen.dart';
+import '../../admin/presentation/admin_home_screen.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -44,13 +46,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   Future<void> _checkAuthAndNavigate() async {
     debugPrint("🔥 SPLASH STARTED 🔥");
-
     if (!mounted) return;
 
     try {
-      /// 📱 1. جلب رقم الجوال
       final phone = await AuthStorage().getPhone();
-
       debugPrint("PHONE: $phone");
 
       if (phone == null || phone.isEmpty) {
@@ -58,21 +57,51 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         return;
       }
 
-      /// 🔥🔥🔥 2. التحقق من التاجر أولاً (الأهم)
-      final marketCheck = await Supabase.instance.client
-          .from('markets')
+      // ══════════════════════════════════════
+      // 1️⃣ هل هو مدير؟
+      // ══════════════════════════════════════
+      final adminCheck = await Supabase.instance.client
+          .from('admins')
           .select()
-          .eq('owner_phone', phone);
+          .eq('phone', phone)
+          .maybeSingle();
 
-      debugPrint("MARKET CHECK: $marketCheck");
-
-      /// ✅ إذا كان تاجر → مباشرة لوحة التاجر
-      if (marketCheck.isNotEmpty) {
-        _navigateTo(const MerchantHomeScreen());
+      if (adminCheck != null) {
+        debugPrint("✅ ADMIN");
+        _navigateTo(const AdminHomeScreen());
         return;
       }
 
-      /// 👤 3. التحقق من المستخدم (عميل)
+      // ══════════════════════════════════════
+      // 2️⃣ هل هو تاجر؟
+      // ══════════════════════════════════════
+      final marketCheck = await Supabase.instance.client
+          .from('markets')
+          .select()
+          .eq('owner_phone', phone)
+          .maybeSingle();
+
+      debugPrint("MARKET CHECK: $marketCheck");
+
+      if (marketCheck != null) {
+        final marketStatus = marketCheck['status'] ?? 'pending';
+        switch (marketStatus) {
+          case 'active':
+            _navigateTo(const MerchantHomeScreen());
+            return;
+          case 'pending':
+          case 'rejected':
+            _navigateTo(const MerchantPendingScreen());
+            return;
+          case 'frozen':
+            _navigateTo(const MerchantPendingScreen());
+            return;
+        }
+      }
+
+      // ══════════════════════════════════════
+      // 3️⃣ عميل عادي
+      // ══════════════════════════════════════
       final userData = await Supabase.instance.client
           .from('users')
           .select()
@@ -83,30 +112,23 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
       if (!mounted) return;
 
-      /// 💾 حفظ الرقم في AppState
       final notifier = ref.read(appStateProvider.notifier);
       notifier.setUserPhone(phone);
 
-      /// ❗ مستخدم جديد
       if (userData == null) {
         _navigateTo(RegisterScreen(phone: phone));
         return;
       }
 
-      /// 📍 بيانات العميل
       final String? nId = userData['neighborhood_id']?.toString();
       final String? mId = userData['market_id']?.toString();
-
       final String nName = userData['neighborhood_name']?.toString() ?? "";
       final String mName = userData['market_name']?.toString() ?? "";
 
-      /// ✅ إذا مكتمل
       if (nId != null && nId.isNotEmpty && mId != null && mId.isNotEmpty) {
         notifier.setNeighborhood(nId, nName);
         notifier.setMarket(mId, mName);
-
         await notifier.loadInitialData();
-
         _navigateTo(const MainNavigation());
       } else {
         _navigateTo(const NeighborhoodScreen());

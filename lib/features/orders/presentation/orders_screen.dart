@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/order_service.dart';
 import '../../../core/models/order.dart';
 import '../../../core/state/providers.dart';
+import '../../../core/utils/app_notification.dart';
 
 class OrdersScreen extends ConsumerStatefulWidget {
   const OrdersScreen({super.key});
@@ -242,6 +243,57 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   // ══════════════════════════════════════
   // بطاقة الطلب
   // ══════════════════════════════════════
+  Future<void> _cancelOrder(OrderModel order) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text("إلغاء الطلب"),
+        content: const Text(
+          "هل تريد إلغاء هذا الطلب؟",
+          textAlign: TextAlign.right,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("لا"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              "نعم، إلغاء",
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await Supabase.instance.client
+          .from('orders')
+          .update({'status': 'canceled'})
+          .eq('id', order.id);
+
+      // ✅ إذا كان الدفع بالدفتر — تحرير المحجوز
+      if (order.paymentMethod == 'daftar') {
+        await Supabase.instance.client.rpc(
+          'release_daftar_reservation',
+          params: {'p_phone': order.phone, 'p_amount': order.total},
+        );
+      }
+
+      if (!mounted) return;
+      AppNotification.success(context, "تم إلغاء الطلب");
+      loadOrders();
+    } catch (e) {
+      if (!mounted) return;
+      AppNotification.error(context, "حدث خطأ أثناء الإلغاء");
+    }
+  }
+
   Widget _buildOrderCard(OrderModel order) {
     final color = _statusColor(order.status);
     final icon = _statusIcon(order.status);
@@ -512,6 +564,36 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                       ],
                     ),
                   ),
+
+                  // ✅ زر الإلغاء — يظهر فقط عند حالة new
+                  if (order.status == 'new') ...[
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _cancelOrder(order),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.red),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        icon: const Icon(
+                          Icons.cancel_outlined,
+                          color: Colors.red,
+                          size: 18,
+                        ),
+                        label: const Text(
+                          "إلغاء الطلب",
+                          style: TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

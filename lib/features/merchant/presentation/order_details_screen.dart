@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/utils/app_notification.dart';
+import '../../../core/services/order_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -153,53 +154,36 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   }
 
   // ✅ إضافة مبلغ الطلب لرصيد الدفتر عند التوصيل
+  // ✅ تأكيد مبلغ الدفتر عند التوصيل (محجوز → فعلي)
   Future<void> _addToDaftar() async {
     try {
       final phone = order['phone'];
       final amount = (order['total'] as num?)?.toDouble() ?? 0;
+      final orderId = order['id'] as String;
       if (phone == null || amount <= 0) return;
 
-      // جلب الدفتر
-      final daftar = await supabase
-          .from('daftar')
-          .select()
-          .eq('customer_phone', phone)
-          .eq('status', 'approved')
-          .maybeSingle();
+      await OrderService().confirmDaftarPayment(phone, amount, orderId);
 
-      if (daftar == null) return;
-
-      final currentBalance =
-          (daftar['current_balance'] as num?)?.toDouble() ?? 0;
-      final newBalance = currentBalance + amount;
-      final limit = (daftar['credit_limit'] as num?)?.toDouble() ?? 300;
-
-      // تحديث الرصيد
-      await supabase
-          .from('daftar')
-          .update({'current_balance': newBalance})
-          .eq('id', daftar['id']);
-
-      // تسجيل المعاملة
-      await supabase.from('daftar_transactions').insert({
-        'daftar_id': daftar['id'],
-        'order_id': order['id'],
-        'amount': amount,
-        'type': 'order',
-        'note': 'طلب #${order['id'].toString().substring(0, 8).toUpperCase()}',
-      });
-
-      debugPrint("✅ تم إضافة $amount ﷼ لدفتر $phone");
-
-      // تنبيه إذا اقترب من الحد
-      if (mounted && newBalance / limit >= 0.8) {
-        AppNotification.warning(
+      if (mounted) {
+        AppNotification.info(
           context,
-          "⚠️ العميل اقترب من حد الدفتر (${(newBalance / limit * 100).toInt()}%)",
+          "📒 تم إضافة ${amount.toStringAsFixed(1)} ﷼ لدفتر العميل",
         );
       }
     } catch (e) {
-      debugPrint("Daftar update error: $e");
+      debugPrint("Daftar confirm error: $e");
+    }
+  }
+
+  // ✅ تحرير المحجوز عند إلغاء الطلب بالدفتر
+  Future<void> _releaseDaftar() async {
+    try {
+      final phone = order['phone'];
+      final amount = (order['total'] as num?)?.toDouble() ?? 0;
+      if (phone == null || amount <= 0) return;
+      await OrderService().releaseDaftarReservation(phone, amount);
+    } catch (e) {
+      debugPrint("Daftar release error: $e");
     }
   }
 
@@ -235,6 +219,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           .eq('id', order['id']);
       if (!mounted) return;
       setState(() => order['status'] = 'canceled');
+
+      // ✅ إذا كان الدفع بالدفتر — حرر المحجوز
+      if (order['payment_method'] == 'daftar') {
+        await _releaseDaftar();
+      }
     } catch (e) {
       debugPrint("Cancel error: $e");
     }
