@@ -43,37 +43,47 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Future<void> _checkAuthAndNavigate() async {
+    debugPrint("🔥 SPLASH STARTED 🔥");
+
     if (!mounted) return;
 
     try {
       /// 📱 1. جلب رقم الجوال
       final phone = await AuthStorage().getPhone();
 
+      debugPrint("PHONE: $phone");
+
       if (phone == null || phone.isEmpty) {
         _navigateTo(const LoginScreen());
         return;
       }
 
-      /// 🔥 2. التحقق من التاجر أولاً
+      /// 🔥🔥🔥 2. التحقق من التاجر أولاً (الأهم)
       final marketCheck = await Supabase.instance.client
           .from('markets')
           .select()
           .eq('owner_phone', phone);
 
+      debugPrint("MARKET CHECK: $marketCheck");
+
+      /// ✅ إذا كان تاجر → مباشرة لوحة التاجر
       if (marketCheck.isNotEmpty) {
         _navigateTo(const MerchantHomeScreen());
         return;
       }
 
-      /// 👤 3. التحقق من المستخدم
+      /// 👤 3. التحقق من المستخدم (عميل)
       final userData = await Supabase.instance.client
           .from('users')
           .select()
           .eq('phone', phone)
           .maybeSingle();
 
+      debugPrint("USER DATA: $userData");
+
       if (!mounted) return;
 
+      /// 💾 حفظ الرقم في AppState
       final notifier = ref.read(appStateProvider.notifier);
       notifier.setUserPhone(phone);
 
@@ -83,47 +93,22 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         return;
       }
 
-      /// 📍 الخطوة الأهم: قراءة الحي والمتجر من AuthStorage المحلي أولاً
-      final savedSelection = await AuthStorage().getUserSelection();
+      /// 📍 بيانات العميل
+      final String? nId = userData['neighborhood_id']?.toString();
+      final String? mId = userData['market_id']?.toString();
 
-      final String? localNId = savedSelection['neighborhoodId'];
-      final String? localMId = savedSelection['marketId'];
-      final String? localNName = savedSelection['neighborhoodName'];
-      final String? localMName = savedSelection['marketName'];
+      final String nName = userData['neighborhood_name']?.toString() ?? "";
+      final String mName = userData['market_name']?.toString() ?? "";
 
-      /// 📍 ثم من Supabase كـ fallback
-      final String? remoteNId = userData['neighborhood_id']?.toString();
-      final String? remoteMId = userData['market_id']?.toString();
-      final String? remoteNName = userData['neighborhood_name']?.toString();
-      final String? remoteMName = userData['market_name']?.toString();
-
-      /// ✅ الأولوية: المحلي أولاً، ثم السيرفر
-      final String? finalNId = (localNId != null && localNId.isNotEmpty)
-          ? localNId
-          : remoteNId;
-      final String? finalMId = (localMId != null && localMId.isNotEmpty)
-          ? localMId
-          : remoteMId;
-      final String finalNName = (localNName != null && localNName.isNotEmpty)
-          ? localNName
-          : (remoteNName ?? "");
-      final String finalMName = (localMName != null && localMName.isNotEmpty)
-          ? localMName
-          : (remoteMName ?? "");
-
-      /// ✅ إذا مكتمل → ادخل مباشرة
-      if (finalNId != null &&
-          finalNId.isNotEmpty &&
-          finalMId != null &&
-          finalMId.isNotEmpty) {
-        notifier.setNeighborhood(finalNId, finalNName);
-        notifier.setMarket(finalMId, finalMName);
+      /// ✅ إذا مكتمل
+      if (nId != null && nId.isNotEmpty && mId != null && mId.isNotEmpty) {
+        notifier.setNeighborhood(nId, nName);
+        notifier.setMarket(mId, mName);
 
         await notifier.loadInitialData();
 
         _navigateTo(const MainNavigation());
       } else {
-        /// ❗ لم يختر بعد → اذهب لاختيار الحي
         _navigateTo(const NeighborhoodScreen());
       }
     } catch (e) {
@@ -159,24 +144,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             children: [
               Image.asset(
                 "assets/logo.png",
-                width: 140,
+                width: 60,
                 errorBuilder: (context, error, stackTrace) {
-                  return const Icon(Icons.store, size: 80, color: Colors.green);
+                  return const Icon(Icons.store, size: 50, color: Colors.green);
                 },
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                "تموينات الحي",
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                "سوق حارتكم في جوالك",
-                style: TextStyle(color: Colors.grey, fontSize: 16),
               ),
             ],
           ),
