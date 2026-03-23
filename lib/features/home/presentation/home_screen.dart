@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:geolocator/geolocator.dart';
+import 'dart:math';
 
 import '../../../core/services/product_service.dart';
 import '../../../core/services/cart_service.dart';
 import '../../../core/models/product.dart';
 import '../../../core/state/providers.dart';
+import '../../markets/presentation/markets_screen.dart';
 import '../../markets/presentation/markets_screen.dart';
 import '../../../core/utils/app_notification.dart';
 
@@ -19,10 +22,16 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final productService = ProductService();
+  final supabase = Supabase.instance.client;
 
   List<Product> products = [];
   bool isLoading = true;
   String? lastLoadedMarketId;
+
+  // ✅ البقالات القريبة
+  List<Map<String, dynamic>> nearbyMarkets = [];
+  bool isLoadingNearby = false;
+  bool locationDenied = false;
 
   // ✅ الأقسام والفلترة
   List<Map<String, dynamic>> categories = [];
@@ -48,8 +57,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void initState() {
     super.initState();
     Future.microtask(() {
-      loadProducts();
-      _loadCategories();
+      final marketId = ref.read(appStateProvider).marketId;
+      if (marketId == null) {
+        _loadNearbyMarkets();
+      } else {
+        loadProducts();
+        _loadCategories();
+      }
       _loadDeliveryAddress();
     });
   }
@@ -135,6 +149,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final appState = ref.watch(appStateProvider);
     final cartService = ref.read(cartServiceProvider);
+
+    // ✅ إذا لم يختر متجراً بعد — عرض شاشة اختيار البقالة
+    if (appState.marketId == null) {
+      return Scaffold(
+        backgroundColor: Colors.grey[50],
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          centerTitle: true,
+          title: const Text(
+            "تموينات الحي",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              color: Color(0xFF004D40),
+            ),
+          ),
+        ),
+        body: _buildEmptyState(),
+      );
+    }
 
     if (appState.marketId != lastLoadedMarketId) {
       loadProducts();
@@ -573,24 +608,360 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  // ✅ حساب المسافة بين نقطتين (كيلومتر)
+  double _calcDistance(double lat1, double lng1, double lat2, double lng2) {
+    const R = 6371.0;
+    final dLat = (lat2 - lat1) * pi / 180;
+    final dLng = (lng2 - lng1) * pi / 180;
+    final a =
+        sin(dLat / 2) * sin(dLat / 2) +
+        cos(lat1 * pi / 180) *
+            cos(lat2 * pi / 180) *
+            sin(dLng / 2) *
+            sin(dLng / 2);
+    return R * 2 * atan2(sqrt(a), sqrt(1 - a));
+  }
+
+  // ✅ جلب البقالات القريبة
+  Future<void> _loadNearbyMarkets() async {
+    setState(() => isLoadingNearby = true);
+
+    try {
+      final permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        setState(() {
+          locationDenied = true;
+          isLoadingNearby = false;
+        });
+        return;
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      final data = await supabase
+          .from('markets')
+          .select()
+          .eq('status', 'active');
+
+      final markets = List<Map<String, dynamic>>.from(data);
+      final nearby = <Map<String, dynamic>>[];
+
+      for (final m in markets) {
+        final lat = (m['lat'] as num?)?.toDouble();
+        final lng = (m['lng'] as num?)?.toDouble();
+        if (lat == null || lng == null) continue;
+
+        final dist = _calcDistance(pos.latitude, pos.longitude, lat, lng);
+        if (dist <= 3.0) {
+          nearby.add({...m, 'distance': dist});
+        }
+      }
+
+      // ترتيب حسب الأقرب
+      nearby.sort(
+        (a, b) => (a['distance'] as double).compareTo(b['distance'] as double),
+      );
+
+      if (mounted) {
+        setState(() {
+          nearbyMarkets = nearby;
+          isLoadingNearby = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Nearby markets error: $e");
+      if (mounted) setState(() => isLoadingNearby = false);
+    }
+  }
+
+  // ✅ اختيار بقالة
+  void _selectMarket(Map<String, dynamic> market) {
+    final notifier = ref.read(appStateProvider.notifier);
+    notifier.setMarket(market['id'], market['name'] ?? '');
+    notifier.loadInitialData();
+  }
+
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.shopping_basket_outlined,
-            size: 64,
-            color: Colors.grey,
-          ),
-          const SizedBox(height: 16),
-          const Text("لا توجد منتجات متاحة حالياً"),
-          TextButton(
-            onPressed: loadProducts,
-            child: const Text("إعادة المحاولة"),
+    final userName = ref.read(appStateProvider).userPhone ?? '';
+
+    return RefreshIndicator(
+      onRefresh: _loadNearbyMarkets,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+
+            // ── رسالة الترحيب ──
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const Text(
+                      "مرحباً بك! 👋",
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF004D40),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "اختر بقالتك القريبة لتبدأ التسوق",
+                      style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 24),
+
+            if (isLoadingNearby)
+              const Column(
+                children: [
+                  SizedBox(height: 40),
+                  CircularProgressIndicator(color: Color(0xFF004D40)),
+                  SizedBox(height: 16),
+                  Text(
+                    "جاري البحث عن البقالات القريبة...",
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ],
+              )
+            else if (locationDenied)
+              _buildLocationDenied()
+            else if (nearbyMarkets.isEmpty && !isLoadingNearby)
+              _buildNoMarkets()
+            else
+              _buildMarketsList(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMarketsList() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "${nearbyMarkets.length} بقالة",
+              style: TextStyle(color: Colors.grey[500], fontSize: 13),
+            ),
+            const Row(
+              children: [
+                Text(
+                  "البقالات القريبة منك",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Colors.black87,
+                  ),
+                ),
+                SizedBox(width: 6),
+                Icon(Icons.store_outlined, color: Color(0xFF004D40), size: 20),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ...nearbyMarkets.map((m) => _buildMarketCard(m)),
+      ],
+    );
+  }
+
+  Widget _buildMarketCard(Map<String, dynamic> market) {
+    final dist = (market['distance'] as double);
+    final distStr = dist < 1
+        ? "${(dist * 1000).toInt()} م"
+        : "${dist.toStringAsFixed(1)} كم";
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            // ── زر الاختيار ──
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF004D40),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: () => _selectMarket(market),
+              child: const Text(
+                "اختر",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            const Spacer(),
+            // ── معلومات المتجر ──
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  market['name'] ?? '',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      distStr,
+                      style: const TextStyle(
+                        color: Color(0xFF4CAF50),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.location_on,
+                      color: Color(0xFF4CAF50),
+                      size: 14,
+                    ),
+                  ],
+                ),
+                if (market['neighborhood_name'] != null &&
+                    market['neighborhood_name'].toString().isNotEmpty)
+                  Text(
+                    market['neighborhood_name'],
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  ),
+              ],
+            ),
+            const SizedBox(width: 12),
+            // ── صورة أو أيقونة ──
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E9),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child:
+                  market['store_image_url'] != null &&
+                      market['store_image_url'].toString().isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        market['store_image_url'],
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  : const Icon(
+                      Icons.store_outlined,
+                      color: Color(0xFF004D40),
+                      size: 28,
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLocationDenied() {
+    return Column(
+      children: [
+        const SizedBox(height: 30),
+        const Icon(Icons.location_off_outlined, size: 64, color: Colors.grey),
+        const SizedBox(height: 16),
+        const Text(
+          "لم يتم السماح بالوصول للموقع",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          "نحتاج موقعك لعرض البقالات القريبة منك",
+          style: TextStyle(color: Colors.grey[500], fontSize: 14),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 20),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF004D40),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          onPressed: () {
+            setState(() => locationDenied = false);
+            _loadNearbyMarkets();
+          },
+          icon: const Icon(Icons.my_location, size: 18),
+          label: const Text("السماح بالموقع"),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNoMarkets() {
+    return Column(
+      children: [
+        const SizedBox(height: 30),
+        const Text("😔", style: TextStyle(fontSize: 56)),
+        const SizedBox(height: 16),
+        const Text(
+          "لا توجد بقالات قريبة منك",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          "لا توجد بقالات في نطاق 3 كيلومتر حالياً\nسيتم إشعارك عند إضافة بقالة في حيك",
+          style: TextStyle(color: Colors.grey[500], fontSize: 14),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 20),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: Color(0xFF004D40)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          onPressed: _loadNearbyMarkets,
+          icon: const Icon(Icons.refresh, color: Color(0xFF004D40), size: 18),
+          label: const Text(
+            "إعادة البحث",
+            style: TextStyle(color: Color(0xFF004D40)),
+          ),
+        ),
+      ],
     );
   }
 

@@ -32,6 +32,7 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
   final _ownerPhoneCtrl = TextEditingController();
   final _licenseNumberCtrl = TextEditingController();
   final _inviteCodeCtrl = TextEditingController();
+  final _neighborhoodNameCtrl = TextEditingController(); // ✅ حقل الحي
 
   // الصور
   File? _licenseImage;
@@ -71,6 +72,7 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
     _ownerPhoneCtrl.dispose();
     _licenseNumberCtrl.dispose();
     _inviteCodeCtrl.dispose();
+    _neighborhoodNameCtrl.dispose();
     _mapController?.dispose();
     super.dispose();
   }
@@ -222,8 +224,7 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
         'store_image_url': _storeImageUrl ?? '',
         'lat': _selectedLocation?.latitude,
         'lng': _selectedLocation?.longitude,
-        'neighborhood_id': _selectedNeighborhoodId,
-        'neighborhood_name': _selectedNeighborhoodName,
+        'neighborhood_name': _neighborhoodNameCtrl.text.trim(),
         'status': 'pending',
         'invite_code': _inviteCodeCtrl.text.trim().toUpperCase(),
       });
@@ -288,7 +289,6 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
                 _buildStep1BasicInfo(),
                 _buildStep2Location(),
                 _buildStep3Images(),
-                _buildStep4InviteCode(),
               ],
             ),
           ),
@@ -302,7 +302,7 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
 
   // ── مؤشر الخطوات ──
   Widget _buildStepIndicator() {
-    final steps = ['البيانات', 'الموقع', 'الصور', 'الكود'];
+    final steps = ['البيانات', 'الموقع', 'الصور'];
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -418,49 +418,11 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
             ),
             const SizedBox(height: 12),
 
-            // اختيار الحي
-            DropdownButtonFormField<String>(
-              value: _selectedNeighborhoodId,
-              isExpanded: true,
-              decoration: InputDecoration(
-                labelText: "الحي الذي يخدمه المتجر *",
-                prefixIcon: const Icon(
-                  Icons.location_city_outlined,
-                  color: _primaryDark,
-                ),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade200),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade200),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: _primary, width: 1.5),
-                ),
-              ),
-              hint: const Text("اختر الحي"),
-              items: _neighborhoods
-                  .map(
-                    (n) => DropdownMenuItem<String>(
-                      value: n['id'] as String,
-                      child: Text(n['name'] ?? ''),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (val) {
-                setState(() {
-                  _selectedNeighborhoodId = val;
-                  _selectedNeighborhoodName = _neighborhoods.firstWhere(
-                    (n) => n['id'] == val,
-                  )['name'];
-                });
-              },
-              validator: (v) => v == null ? "اختر الحي" : null,
+            // ✅ حقل الحي نصي اختياري
+            _buildTextField(
+              controller: _neighborhoodNameCtrl,
+              label: "الحي الذي يخدمه المتجر (اختياري)",
+              icon: Icons.location_city_outlined,
             ),
           ],
         ),
@@ -724,104 +686,9 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
     );
   }
 
-  // ── الخطوة 4: كود الدعوة ──
-  Widget _buildStep4InviteCode() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          _buildSectionTitle("كود الدعوة"),
-          const SizedBox(height: 8),
-          Text(
-            "أدخل كود الدعوة الذي حصلت عليه من إدارة التطبيق",
-            style: TextStyle(color: Colors.grey[500], fontSize: 13),
-            textAlign: TextAlign.right,
-          ),
-          const SizedBox(height: 30),
-
-          Container(
-            width: 80,
-            height: 80,
-            margin: const EdgeInsets.only(bottom: 20),
-            decoration: BoxDecoration(
-              color: _primaryDark.withValues(alpha: 0.08),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.vpn_key_outlined,
-              color: _primaryDark,
-              size: 40,
-            ),
-          ),
-
-          TextField(
-            controller: _inviteCodeCtrl,
-            textAlign: TextAlign.center,
-            textCapitalization: TextCapitalization.characters,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 4,
-            ),
-            decoration: InputDecoration(
-              hintText: "MARKET-2024",
-              hintStyle: TextStyle(
-                color: Colors.grey[300],
-                letterSpacing: 2,
-                fontSize: 18,
-              ),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: _primary, width: 1.5),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.orange.shade100),
-            ),
-            child: const Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    "إذا لم يكن لديك كود تواصل مع الإدارة على الرقم 0552134846",
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      color: Colors.orange,
-                      fontSize: 13,
-                      height: 1.5,
-                    ),
-                  ),
-                ),
-                SizedBox(width: 8),
-                Icon(Icons.info_outline, color: Colors.orange, size: 20),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ── أزرار التنقل ──
   Widget _buildNavButtons() {
-    final isLastStep = _currentStep == 3;
+    final isLastStep = _currentStep == 2;
 
     return Container(
       color: Colors.white,
@@ -897,10 +764,7 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
     // التحقق من الخطوة الأولى
     if (_currentStep == 0) {
       if (!_formKey.currentState!.validate()) return;
-      if (_selectedNeighborhoodId == null) {
-        AppNotification.warning(context, "الرجاء اختيار الحي");
-        return;
-      }
+      // ✅ الحي اختياري — لا تحقق مطلوب
     }
     // التحقق من الخطوة الثانية
     if (_currentStep == 1 && _selectedLocation == null) {
@@ -908,6 +772,10 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
       return;
     }
     // التحقق من الخطوة الثالثة
+    if (_currentStep == 1 && _selectedLocation == null) {
+      AppNotification.warning(context, "الرجاء تحديد الموقع على الخريطة");
+      return;
+    }
     if (_currentStep == 2) {
       if (_licenseImage == null) {
         AppNotification.warning(context, "الرجاء إضافة صورة السجل التجاري");

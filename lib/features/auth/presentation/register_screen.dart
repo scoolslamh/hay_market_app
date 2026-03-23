@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../../core/utils/app_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/services/auth_storage.dart';
 import '../../../core/state/providers.dart';
-import '../../location/presentation/neighborhood_screen.dart';
-import 'map_picker_screen.dart';
+import '../../../core/utils/app_notification.dart';
+import '../../../core/navigation/main_navigation.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   final String phone;
@@ -15,191 +15,423 @@ class RegisterScreen extends ConsumerStatefulWidget {
 }
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final nameController = TextEditingController();
-  final emailController = TextEditingController();
-  final addressController = TextEditingController();
+  static const Color _primary = Color(0xFF4CAF50);
+  static const Color _primaryDark = Color(0xFF004D40);
 
   final supabase = Supabase.instance.client;
-  bool _isLoading = false;
+  final _nameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  final _confirmPasswordCtrl = TextEditingController();
 
-  Map<String, dynamic>? _selectedLocationData;
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirm = true;
 
   @override
   void dispose() {
-    nameController.dispose();
-    emailController.dispose();
-    addressController.dispose();
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+    _confirmPasswordCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> saveUser() async {
-    if (!_formKey.currentState!.validate()) return;
+  String _buildEmail(String phone) => '${_normalizePhone(phone)}@haymarket.app';
+
+  String _normalizePhone(String phone) {
+    phone = phone
+        .trim()
+        .replaceAll(' ', '')
+        .replaceAll('-', '')
+        .replaceAll('+', '');
+    if (phone.startsWith('00966')) return phone.replaceFirst('00966', '966');
+    if (phone.startsWith('966') && phone.length == 12) return phone;
+    if (phone.startsWith('0')) return '966${phone.substring(1)}';
+    if (!phone.startsWith('966')) return '966$phone';
+    return phone;
+  }
+
+  // ── التحقق من كلمة المرور ──
+  String? _validatePassword(String password) {
+    if (password.length < 6) {
+      return "كلمة المرور يجب أن تكون 6 أحرف على الأقل";
+    }
+    if (!password.contains(RegExp(r'[A-Z]'))) {
+      return "يجب أن تحتوي على حرف كبير";
+    }
+    if (!password.contains(RegExp(r'[0-9]'))) {
+      return "يجب أن تحتوي على رقم";
+    }
+    return null;
+  }
+
+  Future<void> _register() async {
+    final name = _nameCtrl.text.trim();
+    final email = _emailCtrl.text.trim();
+    final password = _passwordCtrl.text.trim();
+    final confirm = _confirmPasswordCtrl.text.trim();
+
+    // التحقق من الحقول
+    if (name.isEmpty) {
+      AppNotification.warning(context, "أدخل اسمك الكامل");
+      return;
+    }
+
+    if (email.isEmpty || !email.contains('@')) {
+      AppNotification.warning(context, "أدخل بريد إلكتروني صحيح");
+      return;
+    }
+
+    final passwordError = _validatePassword(password);
+    if (passwordError != null) {
+      AppNotification.warning(context, passwordError);
+      return;
+    }
+
+    if (password != confirm) {
+      AppNotification.warning(context, "كلمة المرور غير متطابقة");
+      return;
+    }
 
     setState(() => _isLoading = true);
 
+    // ✅ توحيد صيغة الرقم
+    final normalizedPhone = _normalizePhone(widget.phone);
+
     try {
-      // 1. حفظ بيانات المستخدم في جدول users وجلب الـ 'id' المولد تلقائياً
-      // نستخدم .select('id').single() للحصول على المعرف فور الحفظ
-      final userResponse = await supabase
-          .from("users")
-          .upsert({
-            "phone": widget.phone,
-            "name": nameController.text.trim(),
-            "email": emailController.text.trim(),
-            "address": addressController.text,
-            "role": "customer",
-          }, onConflict: 'phone')
-          .select('id')
-          .single();
+      // التحقق من عدم تكرار الإيميل
+      final emailCheck = await supabase
+          .from('users')
+          .select('email')
+          .eq('email', email)
+          .maybeSingle();
 
-      final String generatedUserId = userResponse['id'];
-
-      // 2. إدخال الموقع الدقيق في جدول addresses مع ربطه بـ user_id الصحيح
-      if (_selectedLocationData != null) {
-        await supabase.from("addresses").upsert({
-          "user_id": generatedUserId, // ✅ الربط الصحيح بالمعرف
-          "phone": widget.phone, // الاحتفاظ بالرقم كمرجع إضافي
-          "address_name": _selectedLocationData!['address'],
-          "lat": _selectedLocationData!['lat'],
-          "lng": _selectedLocationData!['lng'],
-        }, onConflict: 'phone');
+      if (emailCheck != null) {
+        if (!mounted) return;
+        AppNotification.error(context, "البريد الإلكتروني مستخدم مسبقاً");
+        setState(() => _isLoading = false);
+        return;
       }
 
-      // 3. تحديث حالة التطبيق المحلية
-      ref.read(appStateProvider.notifier).setUserPhone(widget.phone);
+      // ✅ استخدام الإيميل الحقيقي في Auth
+      final response = await supabase.auth.signUp(
+        email: email,
+        password: password,
+        data: {'phone': normalizedPhone, 'name': name},
+      );
+
+      if (response.user == null) {
+        if (!mounted) return;
+        AppNotification.error(context, "فشل إنشاء الحساب");
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // ✅ حفظ في جدول users بالرقم الموحد
+      final existingUser = await supabase
+          .from('users')
+          .select('id')
+          .eq('phone', normalizedPhone)
+          .maybeSingle();
+
+      if (existingUser == null) {
+        await supabase.from('users').insert({
+          'auth_id': response.user!.id,
+          'phone': normalizedPhone,
+          'name': name,
+          'email': email,
+          'role': 'customer',
+        });
+      } else {
+        await supabase
+            .from('users')
+            .update({
+              'auth_id': response.user!.id,
+              'name': name,
+              'email': email,
+            })
+            .eq('phone', normalizedPhone);
+      }
+
+      await AuthStorage().savePhone(normalizedPhone);
+
+      final notifier = ref.read(appStateProvider.notifier);
+      notifier.setUserPhone(widget.phone);
 
       if (!mounted) return;
 
-      AppNotification.success(context, "تم حفظ بياناتك بنجاح، اختر حيك الآن");
+      // إظهار تنبيه تأكيد الإيميل
+      AppNotification.success(
+        context,
+        "تم إنشاء حسابك! تحقق من بريدك لتأكيد الحساب",
+      );
 
-      // 4. التوجه لاختيار الحي
+      await Future.delayed(const Duration(seconds: 2));
+
+      if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const NeighborhoodScreen()),
+        MaterialPageRoute(builder: (_) => const MainNavigation()),
         (route) => false,
       );
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      if (e.message.contains('already registered')) {
+        AppNotification.error(context, "هذا الرقم مسجل مسبقاً");
+      } else {
+        AppNotification.error(context, "خطأ: ${e.message}");
+      }
     } catch (e) {
-      AppNotification.error(context, "حدث خطأ أثناء الحفظ: $e");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> pickLocation() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const MapPickerScreen()),
-    );
-
-    if (result != null && result is Map<String, dynamic>) {
-      setState(() {
-        _selectedLocationData = result;
-        addressController.text = result['address'];
-      });
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      AppNotification.error(context, "حدث خطأ: $e");
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("إكمال التسجيل"), centerTitle: true),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          "إنشاء حساب جديد",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: Colors.black87,
+          ),
+        ),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: nameController,
-                decoration: InputDecoration(
-                  labelText: "الاسم الكامل",
-                  prefixIcon: const Icon(Icons.person_outline),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                validator: (value) => (value == null || value.isEmpty)
-                    ? "يرجى إدخال الاسم"
-                    : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            // رقم الجوال (للعرض فقط)
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: _primary.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _primary.withValues(alpha: 0.2)),
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  labelText: "البريد الإلكتروني",
-                  prefixIcon: const Icon(Icons.email_outlined),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Icon(Icons.check_circle, color: _primary, size: 18),
+                  Text(
+                    widget.phone,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: _primaryDark,
+                      fontSize: 15,
+                    ),
                   ),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return "يرجى إدخال البريد";
-                  }
-                  if (!RegExp(
-                    r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                  ).hasMatch(value)) {
-                    return "بريد غير صحيح";
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: addressController,
-                readOnly: true,
-                decoration: InputDecoration(
-                  labelText: "عنوان التوصيل المختار",
-                  prefixIcon: const Icon(Icons.location_on_outlined),
-                  filled: true,
-                  fillColor: Colors.grey[50],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                  const Text(
+                    "رقم الجوال",
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
                   ),
-                ),
-                validator: (value) => (value == null || value.isEmpty)
-                    ? "يرجى تحديد الموقع من الخريطة"
-                    : null,
+                ],
               ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.all(12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                icon: const Icon(Icons.map_outlined),
-                label: const Text("اختيار الموقع من الخريطة"),
-                onPressed: pickLocation,
+            ),
+            const SizedBox(height: 20),
+
+            // الاسم
+            _buildLabel("الاسم الكامل *"),
+            const SizedBox(height: 8),
+            _buildTextField(
+              controller: _nameCtrl,
+              hint: "أدخل اسمك الكامل",
+              icon: Icons.person_outline,
+            ),
+            const SizedBox(height: 16),
+
+            // البريد الإلكتروني
+            _buildLabel("البريد الإلكتروني *"),
+            const SizedBox(height: 4),
+            Text(
+              "يُستخدم لاستعادة كلمة المرور",
+              style: TextStyle(color: Colors.grey[500], fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            _buildTextField(
+              controller: _emailCtrl,
+              hint: "example@email.com",
+              icon: Icons.email_outlined,
+              keyboardType: TextInputType.emailAddress,
+            ),
+            const SizedBox(height: 16),
+
+            // كلمة المرور
+            _buildLabel("كلمة المرور *"),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade100),
               ),
-              const SizedBox(height: 40),
-              _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF004D40),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+              child: const Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      "6 أحرف على الأقل + رقم + حرف كبير\nمثال: Market1",
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        color: Colors.orange,
+                        fontSize: 12,
+                        height: 1.4,
                       ),
-                      onPressed: saveUser,
-                      child: const Text(
-                        "حفظ واختيار الحي",
+                    ),
+                  ),
+                  SizedBox(width: 6),
+                  Icon(Icons.info_outline, color: Colors.orange, size: 16),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            _buildPasswordField(
+              controller: _passwordCtrl,
+              hint: "أدخل كلمة المرور",
+              obscure: _obscurePassword,
+              onToggle: () =>
+                  setState(() => _obscurePassword = !_obscurePassword),
+            ),
+            const SizedBox(height: 16),
+
+            // تأكيد كلمة المرور
+            _buildLabel("تأكيد كلمة المرور *"),
+            const SizedBox(height: 8),
+            _buildPasswordField(
+              controller: _confirmPasswordCtrl,
+              hint: "أعد إدخال كلمة المرور",
+              obscure: _obscureConfirm,
+              onToggle: () =>
+                  setState(() => _obscureConfirm = !_obscureConfirm),
+            ),
+
+            const SizedBox(height: 30),
+
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _primaryDark,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: _isLoading ? null : _register,
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        "إنشاء الحساب",
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
-            ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLabel(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontWeight: FontWeight.w600,
+        fontSize: 14,
+        color: Colors.black87,
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    TextInputType? keyboardType,
+  }) {
+    return TextField(
+      controller: controller,
+      textAlign: TextAlign.right,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: Colors.grey[400]),
+        filled: true,
+        fillColor: Colors.grey[50],
+        prefixIcon: Icon(icon, color: _primaryDark, size: 20),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _primary, width: 1.5),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPasswordField({
+    required TextEditingController controller,
+    required String hint,
+    required bool obscure,
+    required VoidCallback onToggle,
+  }) {
+    return TextField(
+      controller: controller,
+      obscureText: obscure,
+      textAlign: TextAlign.right,
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: Colors.grey[400]),
+        filled: true,
+        fillColor: Colors.grey[50],
+        prefixIcon: IconButton(
+          icon: Icon(
+            obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+            color: Colors.grey,
+            size: 20,
           ),
+          onPressed: onToggle,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _primary, width: 1.5),
         ),
       ),
     );

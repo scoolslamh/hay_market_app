@@ -129,10 +129,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         notifier.setNeighborhood(nId, nName);
         notifier.setMarket(mId, mName);
         await notifier.loadInitialData();
-        _navigateTo(const MainNavigation());
-      } else {
-        _navigateTo(const NeighborhoodScreen());
       }
+
+      // ✅ يذهب دائماً للرئيسية — ستعرض البقالات القريبة إذا لم يختر
+      _navigateTo(const MainNavigation());
     } catch (e) {
       debugPrint("Splash Error: $e");
       _navigateTo(const LoginScreen());
