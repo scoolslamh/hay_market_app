@@ -5,6 +5,8 @@ import '../../../core/services/auth_storage.dart';
 import '../../../core/state/providers.dart';
 import '../../../core/utils/app_notification.dart';
 import '../../../core/navigation/main_navigation.dart';
+import '../../merchant/presentation/merchant_home_screen.dart';
+import '../../merchant/presentation/merchant_pending_screen.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   final String phone;
@@ -128,6 +130,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         return;
       }
 
+      // ✅ التحقق هل هو تاجر
+      final marketCheck = await supabase
+          .from('markets')
+          .select('id, status')
+          .eq('owner_phone', normalizedPhone)
+          .maybeSingle();
+
+      final isMerchant = marketCheck != null;
+      final userRole = isMerchant ? 'merchant' : 'customer';
+
       // ✅ حفظ في جدول users بالرقم الموحد
       final existingUser = await supabase
           .from('users')
@@ -141,7 +153,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           'phone': normalizedPhone,
           'name': name,
           'email': email,
-          'role': 'customer',
+          'role': userRole,
         });
       } else {
         await supabase
@@ -150,6 +162,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               'auth_id': response.user!.id,
               'name': name,
               'email': email,
+              'role': userRole,
             })
             .eq('phone', normalizedPhone);
       }
@@ -167,14 +180,29 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         "تم إنشاء حسابك! تحقق من بريدك لتأكيد الحساب",
       );
 
-      await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(const Duration(seconds: 1));
 
       if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const MainNavigation()),
-        (route) => false,
-      );
+
+      // ✅ توجيه حسب الدور
+      if (isMerchant) {
+        final marketStatus = marketCheck['status'] ?? 'pending';
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (_) => marketStatus == 'active'
+                ? const MerchantHomeScreen()
+                : const MerchantPendingScreen(),
+          ),
+          (route) => false,
+        );
+      } else {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MainNavigation()),
+          (route) => false,
+        );
+      }
     } on AuthException catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
