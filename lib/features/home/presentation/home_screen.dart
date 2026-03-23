@@ -665,6 +665,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         (a, b) => (a['distance'] as double).compareTo(b['distance'] as double),
       );
 
+      debugPrint("✅ Found ${nearby.length} nearby markets");
+      for (final m in nearby) {
+        debugPrint(
+          "  → ${m['name']} | ${m['distance']} km | ${m['owner_phone']}",
+        );
+      }
+
       if (mounted) {
         setState(() {
           nearbyMarkets = nearby;
@@ -678,10 +685,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   // ✅ اختيار بقالة
-  void _selectMarket(Map<String, dynamic> market) {
+  void _selectMarket(Map<String, dynamic> market) async {
     final notifier = ref.read(appStateProvider.notifier);
-    notifier.setMarket(market['id'], market['name'] ?? '');
-    notifier.loadInitialData();
+    notifier.setMarket(market['id'] as String, market['name'] ?? '');
+    await notifier.loadInitialData();
+    if (mounted) {
+      setState(() {
+        products = [];
+        isLoading = true;
+      });
+      loadProducts();
+      _loadCategories();
+    }
   }
 
   Widget _buildEmptyState() {
