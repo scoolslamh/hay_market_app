@@ -627,9 +627,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     setState(() => isLoadingNearby = true);
 
     try {
-      final permission = await Geolocator.requestPermission();
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        debugPrint("❌ Location service disabled");
+        AppNotification.warning(context, "فعّل خدمة الموقع في الجهاز");
+        setState(() => isLoadingNearby = false);
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
+        debugPrint("❌ Location permission denied");
         setState(() {
           locationDenied = true;
           isLoadingNearby = false;
@@ -637,9 +649,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return;
       }
 
+      debugPrint("📍 Getting current position...");
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
-      );
+      ).timeout(const Duration(seconds: 10));
+
+      debugPrint("📍 Position: ${pos.latitude}, ${pos.longitude}");
+
+      // ✅ حفظ موقع العميل في addresses
+      final phone = ref.read(appStateProvider).userPhone;
+      if (phone != null) {
+        await supabase.from('addresses').upsert({
+          'phone': phone,
+          'lat': pos.latitude,
+          'lng': pos.longitude,
+          'address_name': 'موقعي الحالي',
+        }, onConflict: 'phone');
+      }
 
       final data = await supabase
           .from('markets')
@@ -647,17 +673,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           .eq('status', 'active');
 
       final markets = List<Map<String, dynamic>>.from(data);
+      debugPrint("🏪 Total active markets: ${markets.length}");
+
       final nearby = <Map<String, dynamic>>[];
 
       for (final m in markets) {
         final lat = (m['lat'] as num?)?.toDouble();
         final lng = (m['lng'] as num?)?.toDouble();
-        if (lat == null || lng == null) continue;
+        if (lat == null || lng == null) {
+          debugPrint("⚠️ ${m['name']} has no location");
+          continue;
+        }
 
         final dist = _calcDistance(pos.latitude, pos.longitude, lat, lng);
-        if (dist <= 3.0) {
-          nearby.add({...m, 'distance': dist});
-        }
+        debugPrint("📏 ${m['name']}: $dist km");
+
+        // ✅ نعرض كل البقالات مؤقتاً بدون حد المسافة للاختبار
+        nearby.add({...m, 'distance': dist});
       }
 
       // ترتيب حسب الأقرب
