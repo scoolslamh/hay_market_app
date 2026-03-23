@@ -124,20 +124,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // ✅ جلب الإيميل الحقيقي من جدول users
-      final userCheck = await supabase
-          .from('users')
-          .select('email')
+      String? realEmail;
+
+      // ✅ أولاً تحقق من admins
+      final adminCheck = await supabase
+          .from('admins')
+          .select('phone')
           .eq('phone', phone)
           .maybeSingle();
 
-      if (userCheck == null) {
+      if (adminCheck != null) {
+        // المدير — جلب إيميله من users
+        final adminUser = await supabase
+            .from('users')
+            .select('email')
+            .eq('phone', phone)
+            .maybeSingle();
+        realEmail = adminUser?['email'] as String?;
+      } else {
+        // مستخدم عادي
+        final userCheck = await supabase
+            .from('users')
+            .select('email')
+            .eq('phone', phone)
+            .maybeSingle();
+        realEmail = userCheck?['email'] as String?;
+      }
+
+      if (realEmail == null || realEmail.isEmpty) {
         AppNotification.error(context, "الرقم غير مسجل");
         setState(() => _isLoading = false);
         return;
       }
-
-      final realEmail = userCheck['email'] as String;
 
       final response = await supabase.auth.signInWithPassword(
         email: realEmail,
