@@ -382,43 +382,26 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                     try {
                       final p = ref.read(appStateProvider).userPhone;
                       if (p == null) return;
-                      final existing = await Supabase.instance.client
-                          .from('addresses')
-                          .select('id')
-                          .eq('phone', p)
-                          .maybeSingle();
-                      if (existing != null) {
-                        await Supabase.instance.client
-                            .from('addresses')
-                            .update({
-                              "address_name": result['address'],
-                              "lat": result['lat'],
-                              "lng": result['lng'],
-                            })
-                            .eq('phone', p);
-                      } else {
-                        await Supabase.instance.client
-                            .from('addresses')
-                            .insert({
-                              "phone": p,
-                              "address_name": result['address'],
-                              "lat": result['lat'],
-                              "lng": result['lng'],
-                            });
-                      }
+                      debugPrint("💾 Saving address for phone: $p");
+                      debugPrint("💾 Address: ${result['address']}");
+
+                      await Supabase.instance.client.from('addresses').upsert({
+                        "phone": p,
+                        "address_name": result['address'],
+                        "lat": result['lat'],
+                        "lng": result['lng'],
+                      }, onConflict: 'phone');
+
                       await _loadAddress();
                       if (!mounted) return;
-                      messenger.clearSnackBars();
                       AppNotification.success(
                         context,
-                        "تم تحديث العنوان بنجاح",
+                        "✅ تم تحديث العنوان بنجاح",
                       );
                     } catch (e) {
+                      debugPrint("❌ Address save error: $e");
                       if (!mounted) return;
-                      AppNotification.error(
-                        context,
-                        "حدث خطأ أثناء حفظ العنوان",
-                      );
+                      AppNotification.error(context, "حدث خطأ: $e");
                     }
                   }
                 },

@@ -56,10 +56,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
+    Future.microtask(() async {
       final marketId = ref.read(appStateProvider).marketId;
       if (marketId == null) {
-        _loadNearbyMarkets();
+        // ✅ طلب الإذن أولاً بشكل صريح
+        await _requestLocationPermission();
       } else {
         loadProducts();
         _loadCategories();
@@ -623,6 +624,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   // ✅ جلب البقالات القريبة
+  // ✅ طلب إذن الموقع بشكل صريح مع dialog
+  Future<void> _requestLocationPermission() async {
+    // أولاً نعرض dialog للمستخدم يشرح لماذا نحتاج الموقع
+    if (!mounted) return;
+
+    final agreed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          "نحتاج موقعك 📍",
+          textAlign: TextAlign.right,
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          "لعرض البقالات القريبة منك\nنحتاج الوصول لموقعك الحالي",
+          textAlign: TextAlign.right,
+          style: TextStyle(height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("لاحقاً", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF004D40),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("السماح"),
+          ),
+        ],
+      ),
+    );
+
+    if (agreed == true) {
+      await _loadNearbyMarkets();
+    } else {
+      if (mounted) setState(() => isLoadingNearby = false);
+    }
+  }
+
   Future<void> _loadNearbyMarkets() async {
     setState(() => isLoadingNearby = true);
 
