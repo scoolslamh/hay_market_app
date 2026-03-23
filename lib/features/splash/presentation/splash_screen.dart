@@ -75,11 +75,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       // ══════════════════════════════════════
       // 2️⃣ هل هو تاجر؟
       // ══════════════════════════════════════
-      final marketCheck = await Supabase.instance.client
+      final marketResults = await Supabase.instance.client
           .from('markets')
           .select()
-          .eq('owner_phone', phone)
-          .maybeSingle();
+          .or(
+            'owner_phone.eq.$phone,owner_phone.eq.0${phone.startsWith('966') ? phone.substring(3) : phone}',
+          )
+          .limit(1);
+      final marketCheck = marketResults.isNotEmpty ? marketResults.first : null;
 
       debugPrint("MARKET CHECK: $marketCheck");
 

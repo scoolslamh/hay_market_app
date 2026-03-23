@@ -191,11 +191,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
 
     // التاجر
-    final marketCheck = await supabase
+    final marketResults = await supabase
         .from('markets')
         .select()
-        .eq('owner_phone', phone)
-        .maybeSingle();
+        .or('owner_phone.eq.$phone,owner_phone.eq.0${phone.substring(3)}')
+        .limit(1);
+    final marketCheck = marketResults.isNotEmpty ? marketResults.first : null;
 
     if (marketCheck != null) {
       await AuthStorage().savePhone(phone);

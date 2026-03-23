@@ -130,12 +130,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         return;
       }
 
-      // ✅ التحقق هل هو تاجر
-      final marketCheck = await supabase
+      // ✅ التحقق هل هو تاجر — بكلا صيغتي الرقم
+      final marketResults = await supabase
           .from('markets')
           .select('id, status')
-          .eq('owner_phone', normalizedPhone)
-          .maybeSingle();
+          .or(
+            'owner_phone.eq.$normalizedPhone,owner_phone.eq.${widget.phone.trim()}',
+          )
+          .limit(1);
+
+      final marketCheck = marketResults.isNotEmpty ? marketResults.first : null;
 
       final isMerchant = marketCheck != null;
       final userRole = isMerchant ? 'merchant' : 'customer';

@@ -444,6 +444,7 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
                 child: Text(
                   _addressName,
                   textAlign: TextAlign.right,
+                  textDirection: TextDirection.rtl,
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: _selectedLocation != null
@@ -556,6 +557,7 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
             "الصور مطلوبة للتحقق من هوية المتجر",
             style: TextStyle(color: Colors.grey[500], fontSize: 13),
             textAlign: TextAlign.right,
+            textDirection: TextDirection.rtl,
           ),
           const SizedBox(height: 20),
 
@@ -818,6 +820,7 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
     return TextFormField(
       controller: controller,
       textAlign: TextAlign.right,
+      textDirection: TextDirection.rtl,
       keyboardType: keyboardType,
       validator: validator,
       decoration: InputDecoration(
