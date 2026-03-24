@@ -905,58 +905,105 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildMarketCard(Map<String, dynamic> market) {
     final dist = (market['distance'] as double);
-    final distStr = dist < 1
+    final distStr = dist == 0
+        ? ""
+        : dist < 1
         ? "${(dist * 1000).toInt()} م"
         : "${dist.toStringAsFixed(1)} كم";
     final name = market['name']?.toString() ?? '';
+    final neighborhood = market['neighborhood_name']?.toString() ?? '';
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: const Color(0xFFE8F5E9),
-            borderRadius: BorderRadius.circular(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-          child: const Icon(
-            Icons.store_outlined,
-            color: Color(0xFF004D40),
-            size: 26,
-          ),
-        ),
-        title: Text(
-          name,
-          textAlign: TextAlign.right,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-        ),
-        subtitle: Text(
-          distStr,
-          textAlign: TextAlign.right,
-          style: const TextStyle(
-            color: Color(0xFF4CAF50),
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        trailing: ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF004D40),
-            foregroundColor: Colors.white,
-            elevation: 0,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          textDirection: TextDirection.rtl,
+          children: [
+            // أيقونة المتجر
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E9),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.store_outlined,
+                color: Color(0xFF004D40),
+                size: 26,
+              ),
             ),
-          ),
-          onPressed: () => _selectMarket(market),
-          child: const Text(
-            'اختر',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
+            const SizedBox(width: 12),
+
+            // معلومات المتجر
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    name,
+                    textDirection: TextDirection.rtl,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  if (neighborhood.isNotEmpty)
+                    Text(
+                      neighborhood,
+                      textDirection: TextDirection.rtl,
+                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                    ),
+                  if (distStr.isNotEmpty)
+                    Text(
+                      distStr,
+                      textDirection: TextDirection.rtl,
+                      style: const TextStyle(
+                        color: Color(0xFF4CAF50),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+
+            // زر الاختيار
+            SizedBox(
+              height: 40,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF004D40),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: () => _selectMarket(market),
+                child: const Text(
+                  "اختر",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
