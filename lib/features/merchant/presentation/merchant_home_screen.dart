@@ -84,7 +84,19 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
           .eq('owner_phone', phone)
           .maybeSingle();
 
-      if (market == null) return;
+      if (market == null) {
+        if (!mounted) return;
+
+        setState(() {
+          loadingStats = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('لا يوجد متجر مرتبط بهذا الحساب')),
+        );
+
+        return;
+      }
 
       final mId = market['id'];
       final mName = market['name'];

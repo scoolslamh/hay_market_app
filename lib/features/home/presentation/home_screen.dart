@@ -10,7 +10,6 @@ import '../../../core/services/cart_service.dart';
 import '../../../core/models/product.dart';
 import '../../../core/state/providers.dart';
 import '../../markets/presentation/markets_screen.dart';
-import '../../markets/presentation/markets_screen.dart';
 import '../../../core/utils/app_notification.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -59,8 +58,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     Future.microtask(() async {
       final marketId = ref.read(appStateProvider).marketId;
       if (marketId == null) {
-        // ✅ طلب الإذن أولاً بشكل صريح
-        await _requestLocationPermission();
+        if (mounted) setState(() => isLoading = false);
+        await _loadNearbyMarkets();
       } else {
         loadProducts();
         _loadCategories();
@@ -288,14 +287,55 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
       // ── الجسم ──
       body: RefreshIndicator(
-        onRefresh: loadProducts,
-        child: isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : products.isEmpty
-            ? _buildEmptyState()
-            : _buildBody(cartService),
+        onRefresh: () async {
+          final marketId = ref.read(appStateProvider).marketId;
+          if (marketId == null) {
+            await _loadNearbyMarkets();
+          } else {
+            await loadProducts();
+          }
+        },
+        child: _buildMainContent(cartService),
       ),
     );
+  }
+
+  // ✅ المحتوى الرئيسي حسب الحالة
+  Widget _buildMainContent(CartService cartService) {
+    final marketId = ref.watch(appStateProvider).marketId;
+
+    // لم يختر متجراً بعد
+    if (marketId == null) {
+      return _buildEmptyState();
+    }
+
+    // اختار متجراً — عرض المنتجات
+    if (isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF004D40)),
+      );
+    }
+    if (products.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.shopping_basket_outlined,
+              size: 64,
+              color: Colors.grey[300],
+            ),
+            const SizedBox(height: 12),
+            const Text("لا توجد منتجات متاحة حالياً"),
+            TextButton(
+              onPressed: loadProducts,
+              child: const Text("إعادة المحاولة"),
+            ),
+          ],
+        ),
+      );
+    }
+    return _buildBody(cartService);
   }
 
   // ✅ البنر + المنتجات في ListView واحد
@@ -672,85 +712,64 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _loadNearbyMarkets() async {
-    setState(() => isLoadingNearby = true);
+    if (mounted) setState(() => isLoadingNearby = true);
 
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        debugPrint("❌ Location service disabled");
-        AppNotification.warning(context, "فعّل خدمة الموقع في الجهاز");
-        setState(() => isLoadingNearby = false);
-        return;
-      }
-
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        debugPrint("❌ Location permission denied");
-        setState(() {
-          locationDenied = true;
-          isLoadingNearby = false;
-        });
-        return;
-      }
-
-      debugPrint("📍 Getting current position...");
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      ).timeout(const Duration(seconds: 10));
-
-      debugPrint("📍 Position: ${pos.latitude}, ${pos.longitude}");
-
-      // ✅ حفظ موقع العميل في addresses
-      final phone = ref.read(appStateProvider).userPhone;
-      if (phone != null) {
-        await supabase.from('addresses').upsert({
-          'phone': phone,
-          'lat': pos.latitude,
-          'lng': pos.longitude,
-          'address_name': 'موقعي الحالي',
-        }, onConflict: 'phone');
-      }
-
+      // ✅ جلب كل المتاجر النشطة
       final data = await supabase
           .from('markets')
           .select()
           .eq('status', 'active');
 
       final markets = List<Map<String, dynamic>>.from(data);
-      debugPrint("🏪 Total active markets: ${markets.length}");
+      debugPrint("🏪 Active markets: ${markets.length}");
 
+      // ✅ محاولة جلب الموقع المحفوظ
+      double? userLat;
+      double? userLng;
+
+      try {
+        final phone = ref.read(appStateProvider).userPhone;
+        if (phone != null) {
+          final saved = await supabase
+              .from('addresses')
+              .select('lat, lng')
+              .eq('phone', phone)
+              .maybeSingle();
+
+          if (saved != null && saved['lat'] != null && saved['lng'] != null) {
+            userLat = (saved['lat'] as num).toDouble();
+            userLng = (saved['lng'] as num).toDouble();
+            debugPrint("📍 Saved location: $userLat, $userLng");
+          }
+        }
+      } catch (e) {
+        debugPrint("⚠️ Could not get saved location: $e");
+      }
+
+      // ✅ بناء قائمة المتاجر مع المسافة
       final nearby = <Map<String, dynamic>>[];
 
       for (final m in markets) {
-        final lat = (m['lat'] as num?)?.toDouble();
-        final lng = (m['lng'] as num?)?.toDouble();
-        if (lat == null || lng == null) {
-          debugPrint("⚠️ ${m['name']} has no location");
-          continue;
+        double dist = 0.0;
+
+        if (userLat != null && userLng != null) {
+          final lat = (m['lat'] as num?)?.toDouble();
+          final lng = (m['lng'] as num?)?.toDouble();
+          if (lat != null && lng != null) {
+            dist = _calcDistance(userLat, userLng, lat, lng);
+          }
         }
 
-        final dist = _calcDistance(pos.latitude, pos.longitude, lat, lng);
-        debugPrint("📏 ${m['name']}: $dist km");
-
-        // ✅ نعرض كل البقالات مؤقتاً بدون حد المسافة للاختبار
-        nearby.add({...m, 'distance': dist});
+        nearby.add(Map<String, dynamic>.from(m)..['distance'] = dist);
       }
 
-      // ترتيب حسب الأقرب
+      // ترتيب من الأقرب للأبعد
       nearby.sort(
         (a, b) => (a['distance'] as double).compareTo(b['distance'] as double),
       );
 
-      debugPrint("✅ Found ${nearby.length} nearby markets");
-      for (final m in nearby) {
-        debugPrint(
-          "  → ${m['name']} | ${m['distance']} km | ${m['owner_phone']}",
-        );
-      }
+      debugPrint("✅ Markets to show: ${nearby.length}");
 
       if (mounted) {
         setState(() {
@@ -759,10 +778,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         });
       }
     } catch (e) {
-      debugPrint("Nearby markets error: $e");
+      debugPrint("❌ Error loading markets: $e");
       if (mounted) setState(() => isLoadingNearby = false);
     }
   }
+
+  // ✅ حساب المسافة بين نقطتين (كيلومتر)
 
   // ✅ اختيار بقالة
   void _selectMarket(Map<String, dynamic> market) async {
@@ -780,65 +801,72 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildEmptyState() {
-    final userName = ref.read(appStateProvider).userPhone ?? '';
-
-    return RefreshIndicator(
-      onRefresh: _loadNearbyMarkets,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(20),
+    if (isLoadingNearby) {
+      return const Center(
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const SizedBox(height: 20),
-
-            // ── رسالة الترحيب ──
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    const Text(
-                      "مرحباً بك! 👋",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF004D40),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "اختر بقالتك القريبة لتبدأ التسوق",
-                      style: TextStyle(color: Colors.grey[500], fontSize: 14),
-                    ),
-                  ],
-                ),
-              ],
+            CircularProgressIndicator(color: Color(0xFF004D40)),
+            SizedBox(height: 16),
+            Text(
+              "جاري البحث عن البقالات القريبة...",
+              style: TextStyle(color: Colors.grey),
             ),
-
-            const SizedBox(height: 24),
-
-            if (isLoadingNearby)
-              const Column(
-                children: [
-                  SizedBox(height: 40),
-                  CircularProgressIndicator(color: Color(0xFF004D40)),
-                  SizedBox(height: 16),
-                  Text(
-                    "جاري البحث عن البقالات القريبة...",
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ],
-              )
-            else if (locationDenied)
-              _buildLocationDenied()
-            else if (nearbyMarkets.isEmpty && !isLoadingNearby)
-              _buildNoMarkets()
-            else
-              _buildMarketsList(),
           ],
         ),
-      ),
+      );
+    }
+
+    if (locationDenied) return _buildLocationDenied();
+
+    if (nearbyMarkets.isEmpty) return _buildNoMarkets();
+
+    // ✅ عرض البقالات
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      itemCount: nearbyMarkets.length + 1,
+      itemBuilder: (_, index) {
+        if (index == 0) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              const Text(
+                "مرحباً بك! 👋",
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF004D40),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "اختر بقالتك القريبة لتبدأ التسوق",
+                style: TextStyle(color: Colors.grey[500], fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "${nearbyMarkets.length} بقالة",
+                    style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                  ),
+                  const Text(
+                    "البقالات القريبة منك",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+          );
+        }
+        return _buildMarketCard(nearbyMarkets[index - 1]);
+      },
     );
   }
 
@@ -870,7 +898,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        ...nearbyMarkets.map((m) => _buildMarketCard(m)),
+        for (final m in nearbyMarkets) _buildMarketCard(m),
       ],
     );
   }
@@ -880,110 +908,55 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final distStr = dist < 1
         ? "${(dist * 1000).toInt()} م"
         : "${dist.toStringAsFixed(1)} كم";
+    final name = market['name']?.toString() ?? '';
 
-    return Container(
+    return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE8F5E9),
+            borderRadius: BorderRadius.circular(10),
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            // ── زر الاختيار ──
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF004D40),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              onPressed: () => _selectMarket(market),
-              child: const Text(
-                "اختر",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
+          child: const Icon(
+            Icons.store_outlined,
+            color: Color(0xFF004D40),
+            size: 26,
+          ),
+        ),
+        title: Text(
+          name,
+          textAlign: TextAlign.right,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+        ),
+        subtitle: Text(
+          distStr,
+          textAlign: TextAlign.right,
+          style: const TextStyle(
+            color: Color(0xFF4CAF50),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        trailing: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF004D40),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
             ),
-            const Spacer(),
-            // ── معلومات المتجر ──
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  market['name'] ?? '',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(
-                      distStr,
-                      style: const TextStyle(
-                        color: Color(0xFF4CAF50),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(
-                      Icons.location_on,
-                      color: Color(0xFF4CAF50),
-                      size: 14,
-                    ),
-                  ],
-                ),
-                if (market['neighborhood_name'] != null &&
-                    market['neighborhood_name'].toString().isNotEmpty)
-                  Text(
-                    market['neighborhood_name'],
-                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 12),
-            // ── صورة أو أيقونة ──
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E9),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child:
-                  market['store_image_url'] != null &&
-                      market['store_image_url'].toString().isNotEmpty
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        market['store_image_url'],
-                        fit: BoxFit.cover,
-                      ),
-                    )
-                  : const Icon(
-                      Icons.store_outlined,
-                      color: Color(0xFF004D40),
-                      size: 28,
-                    ),
-            ),
-          ],
+          ),
+          onPressed: () => _selectMarket(market),
+          child: const Text(
+            'اختر',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
       ),
     );

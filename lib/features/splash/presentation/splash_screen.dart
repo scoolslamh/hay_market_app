@@ -131,10 +131,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       if (nId != null && nId.isNotEmpty && mId != null && mId.isNotEmpty) {
         notifier.setNeighborhood(nId, nName);
         notifier.setMarket(mId, mName);
-        await notifier.loadInitialData();
+        // ✅ timeout حتى لا يتوقف
+        await notifier.loadInitialData().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => debugPrint("⚠️ loadInitialData timeout"),
+        );
       }
 
-      // ✅ يذهب دائماً للرئيسية — ستعرض البقالات القريبة إذا لم يختر
+      // ✅ يذهب دائماً للرئيسية
       _navigateTo(const MainNavigation());
     } catch (e) {
       debugPrint("Splash Error: $e");

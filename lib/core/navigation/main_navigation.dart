@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -38,31 +39,32 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
 
   /// 🔥 استرجاع الحي والماركت
   Future<void> _loadSavedData() async {
-    final storage = AuthStorage();
+    try {
+      final storage = AuthStorage();
+      final data = await storage.getUserSelection().timeout(
+        const Duration(seconds: 3),
+      );
 
-    final data = await storage.getUserSelection();
+      final marketId = data['marketId'];
+      final marketName = data['marketName'];
+      final neighborhoodId = data['neighborhoodId'];
+      final neighborhoodName = data['neighborhoodName'];
 
-    final marketId = data['marketId'];
-    final marketName = data['marketName'];
+      if (marketId != null) {
+        ref
+            .read(appStateProvider.notifier)
+            .setMarket(marketId, marketName ?? "");
+      }
 
-    final neighborhoodId = data['neighborhoodId'];
-    final neighborhoodName = data['neighborhoodName'];
-
-    // ✅ الحل النهائي (تمرير قيمتين دائماً)
-    if (marketId != null) {
-      ref.read(appStateProvider.notifier).setMarket(marketId, marketName ?? "");
-    }
-
-    if (neighborhoodId != null) {
-      ref
-          .read(appStateProvider.notifier)
-          .setNeighborhood(neighborhoodId, neighborhoodName ?? "");
-    }
-
-    if (mounted) {
-      setState(() {
-        isLoading = false;
-      });
+      if (neighborhoodId != null) {
+        ref
+            .read(appStateProvider.notifier)
+            .setNeighborhood(neighborhoodId, neighborhoodName ?? "");
+      }
+    } catch (e) {
+      debugPrint("loadSavedData error: $e");
+    } finally {
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
