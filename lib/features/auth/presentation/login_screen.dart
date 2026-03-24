@@ -42,9 +42,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   // ✅ توحيد صيغة الرقم دائماً بـ 966
   String _normalizePhone(String phone) {
-    phone = phone.trim().replaceAll(' ', '').replaceAll('-', '');
+    phone = phone
+        .trim()
+        .replaceAll(' ', '')
+        .replaceAll('-', '')
+        .replaceAll('+', '');
     if (phone.startsWith('00966')) return phone.replaceFirst('00966', '966');
-    if (phone.startsWith('+966')) return phone.replaceFirst('+966', '966');
+    if (phone.startsWith('966') && phone.length == 12) return phone;
     if (phone.startsWith('0')) return '966${phone.substring(1)}';
     if (!phone.startsWith('966')) return '966$phone';
     return phone;
@@ -54,7 +58,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _checkPhone() async {
     final raw = _phoneCtrl.text.trim();
     final phone = _normalizePhone(raw);
-    if (raw.length < 9) {
+    if (phone.length < 12) {
       AppNotification.warning(context, "أدخل رقم جوال صحيح");
       return;
     }
@@ -246,27 +250,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     notifier.setUserPhone(phone);
 
     if (userData != null) {
-      final nId = userData['neighborhood_id']?.toString();
+      // ✅ حاول تحميل البقالة من قاعدة البيانات
       final mId = userData['market_id']?.toString();
-      final nName = userData['neighborhood_name']?.toString() ?? '';
       final mName = userData['market_name']?.toString() ?? '';
-
-      if (nId != null && nId.isNotEmpty && mId != null && mId.isNotEmpty) {
-        notifier.setNeighborhood(nId, nName);
+      if (mId != null && mId.isNotEmpty) {
         notifier.setMarket(mId, mName);
-        await notifier.loadInitialData();
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const MainNavigation()),
-          (route) => false,
-        );
-        return;
+      } else {
+        // ✅ حاول من SharedPreferences
+        final saved = await AuthStorage().getUserSelection();
+        final savedId = saved['marketId'];
+        final savedName = saved['marketName'] ?? '';
+        if (savedId != null && savedId.isNotEmpty) {
+          notifier.setMarket(savedId, savedName);
+        }
       }
     }
 
+    // ✅ دائماً للرئيسية — ستعرض البقالات إذا لم يختر
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (_) => RegisterScreen(phone: phone)),
+      MaterialPageRoute(builder: (_) => const MainNavigation()),
       (route) => false,
     );
   }

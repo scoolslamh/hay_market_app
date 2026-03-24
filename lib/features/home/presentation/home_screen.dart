@@ -11,6 +11,7 @@ import '../../../core/models/product.dart';
 import '../../../core/state/providers.dart';
 import '../../markets/presentation/markets_screen.dart';
 import '../../../core/utils/app_notification.dart';
+import '../../../core/widgets/nearby_markets_sheet.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -150,6 +151,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final appState = ref.watch(appStateProvider);
     final cartService = ref.read(cartServiceProvider);
 
+    // ✅ عند اختيار متجر جديد — تحميل البيانات
+    if (appState.marketId != null && appState.marketId != lastLoadedMarketId) {
+      Future.microtask(() {
+        loadProducts();
+        _loadCategories();
+      });
+    }
+
     // ✅ إذا لم يختر متجراً بعد — عرض شاشة اختيار البقالة
     if (appState.marketId == null) {
       return Scaffold(
@@ -191,12 +200,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             children: [
               // يسار: الموقع
               GestureDetector(
-                onTap: goBackToMarkets,
+                onTap: _openMarketsSheet,
                 child: Row(
                   children: [
                     const Icon(
-                      Icons.location_on,
-                      color: Colors.black87,
+                      Icons.store_outlined,
+                      color: Color(0xFF004D40),
                       size: 20,
                     ),
                     const SizedBox(width: 6),
@@ -206,11 +215,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         Row(
                           children: [
                             Text(
-                              appState.neighborhoodName ?? "اختر موقعك",
-                              style: const TextStyle(
+                              appState.marketName ?? "اختر بقالتك",
+                              style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
-                                color: Colors.black87,
+                                color: appState.marketName != null
+                                    ? const Color(0xFF004D40)
+                                    : Colors.black87,
                               ),
                             ),
                             const Icon(
@@ -220,14 +231,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             ),
                           ],
                         ),
-                        if (appState.marketName != null)
-                          Text(
-                            appState.marketName ?? "",
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey,
-                            ),
+                        Text(
+                          appState.marketName != null
+                              ? "اضغط للتغيير"
+                              : "اضغط لاختيار بقالة",
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
                           ),
+                        ),
                       ],
                     ),
                   ],
@@ -801,72 +813,73 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildEmptyState() {
-    if (isLoadingNearby) {
-      return const Center(
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(color: Color(0xFF004D40)),
-            SizedBox(height: 16),
+            Container(
+              width: 90,
+              height: 90,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E9),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.store_outlined,
+                color: Color(0xFF004D40),
+                size: 46,
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              "مرحباً بك! 👋",
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF004D40),
+              ),
+            ),
+            const SizedBox(height: 8),
             Text(
-              "جاري البحث عن البقالات القريبة...",
-              style: TextStyle(color: Colors.grey),
+              "اختر بقالتك القريبة لتبدأ التسوق",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[500], fontSize: 14),
+            ),
+            const SizedBox(height: 30),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF004D40),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                icon: const Icon(Icons.store_outlined),
+                label: const Text(
+                  "اختر بقالتك",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                onPressed: _openMarketsSheet,
+              ),
             ),
           ],
         ),
-      );
-    }
+      ),
+    );
+  }
 
-    if (locationDenied) return _buildLocationDenied();
-
-    if (nearbyMarkets.isEmpty) return _buildNoMarkets();
-
-    // ✅ عرض البقالات
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      itemCount: nearbyMarkets.length + 1,
-      itemBuilder: (_, index) {
-        if (index == 0) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              const Text(
-                "مرحباً بك! 👋",
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF004D40),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                "اختر بقالتك القريبة لتبدأ التسوق",
-                style: TextStyle(color: Colors.grey[500], fontSize: 14),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "${nearbyMarkets.length} بقالة",
-                    style: TextStyle(color: Colors.grey[500], fontSize: 13),
-                  ),
-                  const Text(
-                    "البقالات القريبة منك",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-            ],
-          );
-        }
-        return _buildMarketCard(nearbyMarkets[index - 1]);
-      },
+  void _openMarketsSheet() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const NearbyMarketsSheet(),
     );
   }
 

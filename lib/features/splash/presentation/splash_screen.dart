@@ -128,14 +128,28 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       final String nName = userData['neighborhood_name']?.toString() ?? "";
       final String mName = userData['market_name']?.toString() ?? "";
 
-      if (nId != null && nId.isNotEmpty && mId != null && mId.isNotEmpty) {
-        notifier.setNeighborhood(nId, nName);
+      // ✅ أولاً: حاول من قاعدة البيانات
+      if (mId != null && mId.isNotEmpty) {
+        if (nId != null && nId.isNotEmpty) {
+          notifier.setNeighborhood(nId, nName);
+        }
         notifier.setMarket(mId, mName);
-        // ✅ timeout حتى لا يتوقف
         await notifier.loadInitialData().timeout(
           const Duration(seconds: 5),
           onTimeout: () => debugPrint("⚠️ loadInitialData timeout"),
         );
+      } else {
+        // ✅ ثانياً: حاول من SharedPreferences
+        final saved = await AuthStorage().getUserSelection();
+        final savedMarketId = saved['marketId'];
+        final savedMarketName = saved['marketName'] ?? '';
+        if (savedMarketId != null && savedMarketId.isNotEmpty) {
+          notifier.setMarket(savedMarketId, savedMarketName);
+          await notifier.loadInitialData().timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => debugPrint("⚠️ timeout"),
+          );
+        }
       }
 
       // ✅ يذهب دائماً للرئيسية

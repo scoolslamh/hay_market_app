@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/widgets/nearby_markets_sheet.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -673,14 +674,20 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
           ),
           _buildDivider(),
           _buildTile(
-            icon: Icons.store_mall_directory_outlined,
-            title: "موقعي",
+            icon: Icons.store_outlined,
+            title: "بقالتي",
             subtitle:
-                "${appState.neighborhoodName ?? ''} - ${appState.marketName ?? ''}",
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const EditLocationScreen()),
-            ),
+                appState.marketName != null && appState.marketName!.isNotEmpty
+                ? appState.marketName!
+                : "اضغط لاختيار بقالتك",
+            onTap: () async {
+              await showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => const NearbyMarketsSheet(),
+              );
+            },
           ),
           _buildDivider(),
           _buildTile(
