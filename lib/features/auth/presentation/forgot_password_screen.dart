@@ -49,7 +49,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         return;
       }
 
-      // ✅ إرسال رابط الاستعادة على الإيميل الحقيقي مباشرة
+      // ✅ إرسال رابط الاستعادة على الإيميل الحقيقي
       await supabase.auth.resetPasswordForEmail(
         email,
         redirectTo: 'haymarket://reset-password',
