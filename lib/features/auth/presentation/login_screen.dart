@@ -130,7 +130,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       String? realEmail;
 
-      // ✅ أولاً تحقق من admins
+      // ✅ تحقق من المدير
       final adminCheck = await supabase
           .from('admins')
           .select('phone')
@@ -138,7 +138,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .maybeSingle();
 
       if (adminCheck != null) {
-        // المدير — جلب إيميله من users
         final adminUser = await supabase
             .from('users')
             .select('email')
@@ -146,13 +145,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             .maybeSingle();
         realEmail = adminUser?['email'] as String?;
       } else {
-        // مستخدم عادي
         final userCheck = await supabase
             .from('users')
             .select('email')
             .eq('phone', phone)
             .maybeSingle();
-        realEmail = userCheck?['email'] as String?;
+
+        if (userCheck != null) {
+          final storedEmail = userCheck['email']?.toString() ?? '';
+          // ✅ إذا الإيميل وهمي (haymarket.app) أو فارغ → ابنه من الرقم
+          if (storedEmail.contains('@haymarket.app') || storedEmail.isEmpty) {
+            realEmail = '${phone}@haymarket.app';
+          } else {
+            realEmail = storedEmail;
+          }
+        }
       }
 
       if (realEmail == null || realEmail.isEmpty) {
