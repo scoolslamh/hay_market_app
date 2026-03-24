@@ -175,7 +175,7 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
     setState(() => _isLoading = true);
     try {
       final phone = _normalizePhone(_ownerPhoneCtrl.text.trim());
-      final email = _buildEmail(phone); // ✅ بناء الإيميل تلقائياً
+      final email = _emailCtrl.text.trim(); // ✅ إيميل حقيقي للاستعادة
       final password = _passwordCtrl.text.trim();
 
       // ── رفع الصور ──
@@ -235,7 +235,7 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
         'auth_id': authResponse.user!.id,
         'phone': phone,
         'name': _ownerNameCtrl.text.trim(),
-        'email': '${phone}@haymarket.app',
+        'email': _emailCtrl.text.trim(),
         'role': 'merchant',
       }, onConflict: 'phone');
 
@@ -277,8 +277,13 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
       }
     }
     if (_currentStep == 3) {
+      final email = _emailCtrl.text.trim();
       final password = _passwordCtrl.text.trim();
       final confirm = _confirmPasswordCtrl.text.trim();
+      if (email.isEmpty || !email.contains('@')) {
+        AppNotification.warning(context, "أدخل بريد إلكتروني صحيح");
+        return;
+      }
       final passError = _validatePassword(password);
       if (passError != null) {
         AppNotification.warning(context, passError);
@@ -753,7 +758,33 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+
+          // البريد الإلكتروني
+          const Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              "البريد الإلكتروني *",
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "يُستخدم لاستعادة كلمة المرور فقط",
+            style: TextStyle(color: Colors.grey[500], fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          _buildTextField(
+            controller: _emailCtrl,
+            label: "example@email.com",
+            icon: Icons.email_outlined,
+            keyboardType: TextInputType.emailAddress,
+          ),
+          const SizedBox(height: 16),
 
           // تنبيه كلمة المرور
           Container(

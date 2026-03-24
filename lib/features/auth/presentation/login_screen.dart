@@ -157,7 +157,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           if (storedEmail.contains('@haymarket.app') || storedEmail.isEmpty) {
             realEmail = '${phone}@haymarket.app';
           } else {
-            realEmail = storedEmail;
+            realEmail = storedEmail; // ✅ إيميل حقيقي
           }
         }
       }

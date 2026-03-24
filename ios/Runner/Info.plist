@@ -102,16 +102,26 @@
     <string>نحتاج للوصول لموقعك لتسهيل عملية التوصيل حتى في حال كان التطبيق في الخلف</string>
 
     <!-- الكاميرا -->
-    <key>NSCameraUsageDescription</key>
-    <string>نحتاج الكاميرا لرفع صور المنتجات</string>
+<key>NSCameraUsageDescription</key>
+<string>نحتاج الكاميرا لرفع صور المنتجات</string>
 
-    <!-- الصور -->
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>نحتاج الوصول للصور لاختيار صور المنتجات</string>
+<!-- الصور -->
+<key>NSPhotoLibraryUsageDescription</key>
+<string>نحتاج الوصول للصور لاختيار صور المنتجات</string>
 
-    <!-- شريط الحالة -->
-    <key>UIStatusBarHidden</key>
-    <false/>
+<!-- شريط الحالة -->
+<key>UIStatusBarHidden</key>
+<false/>
 
+<!-- Deep Link -->
+<key>CFBundleURLTypes</key>
+<array>
+  <dict>
+    <key>CFBundleURLSchemes</key>
+    <array>
+      <string>haymarket</string>
+    </array>
+  </dict>
+</array>
 </dict>
 </plist>
