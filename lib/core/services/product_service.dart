@@ -6,7 +6,7 @@ class ProductService {
   Future<List<Map<String, dynamic>>> getProducts(String marketId) async {
     final response = await supabase
         .from('products')
-        .select()
+        .select('id, name, price, image_url, category_id, stock, market_id, created_at')
         .eq('market_id', marketId)
         // ✅ إخفاء المنتجات النافدة (stock = 0)
         // stock is null = منتج قديم قبل إضافة المخزون → يظهر

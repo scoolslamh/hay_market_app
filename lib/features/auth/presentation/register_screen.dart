@@ -39,8 +39,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     super.dispose();
   }
 
-  String _buildEmail(String phone) => '${_normalizePhone(phone)}@haymarket.app';
-
   String _normalizePhone(String phone) {
     phone = phone
         .trim()

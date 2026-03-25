@@ -7,7 +7,6 @@ import '../../../core/state/providers.dart';
 import '../../../core/services/auth_storage.dart';
 import '../../auth/presentation/login_screen.dart';
 import '../../auth/presentation/register_screen.dart';
-import '../../location/presentation/neighborhood_screen.dart';
 import '../../../core/navigation/main_navigation.dart';
 import '../../merchant/presentation/merchant_home_screen.dart';
 import '../../merchant/presentation/merchant_pending_screen.dart';

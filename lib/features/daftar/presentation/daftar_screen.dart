@@ -129,21 +129,6 @@ class _DaftarScreenState extends ConsumerState<DaftarScreen> {
     }
   }
 
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'pending':
-        return Colors.orange;
-      case 'approved':
-        return _primary;
-      case 'frozen':
-        return Colors.blue;
-      case 'rejected':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-
   String _formatDate(String? dt) {
     if (dt == null) return '-';
     final d = DateTime.tryParse(dt)?.toLocal();

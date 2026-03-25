@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:geolocator/geolocator.dart';
 import 'dart:math';
 
 import '../../../core/services/product_service.dart';
@@ -98,7 +97,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     try {
       final data = await Supabase.instance.client
           .from('categories')
-          .select()
+          .select('id, name, emoji, sort_order')
           .order('sort_order', ascending: true);
 
       if (mounted) {
@@ -151,13 +150,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final appState = ref.watch(appStateProvider);
     final cartService = ref.read(cartServiceProvider);
 
-    // ✅ عند اختيار متجر جديد — تحميل البيانات
-    if (appState.marketId != null && appState.marketId != lastLoadedMarketId) {
-      Future.microtask(() {
+    // ✅ استمع لتغيير المتجر — يُطلق مرة واحدة عند تغيير marketId فقط
+    ref.listen(appStateProvider, (previous, next) {
+      if (next.marketId != null && next.marketId != previous?.marketId) {
+        setState(() {
+          products = [];
+          isLoading = true;
+          selectedCategoryId = null;
+        });
         loadProducts();
         _loadCategories();
-      });
-    }
+      }
+    });
 
     // ✅ إذا لم يختر متجراً بعد — عرض شاشة اختيار البقالة
     if (appState.marketId == null) {
@@ -178,10 +182,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         body: _buildEmptyState(),
       );
-    }
-
-    if (appState.marketId != lastLoadedMarketId) {
-      loadProducts();
     }
 
     return Scaffold(
@@ -675,54 +675,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return R * 2 * atan2(sqrt(a), sqrt(1 - a));
   }
 
-  // ✅ جلب البقالات القريبة
-  // ✅ طلب إذن الموقع بشكل صريح مع dialog
-  Future<void> _requestLocationPermission() async {
-    // أولاً نعرض dialog للمستخدم يشرح لماذا نحتاج الموقع
-    if (!mounted) return;
-
-    final agreed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          "نحتاج موقعك 📍",
-          textAlign: TextAlign.right,
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          "لعرض البقالات القريبة منك\nنحتاج الوصول لموقعك الحالي",
-          textAlign: TextAlign.right,
-          style: TextStyle(height: 1.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("لاحقاً", style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF004D40),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("السماح"),
-          ),
-        ],
-      ),
-    );
-
-    if (agreed == true) {
-      await _loadNearbyMarkets();
-    } else {
-      if (mounted) setState(() => isLoadingNearby = false);
-    }
-  }
-
   Future<void> _loadNearbyMarkets() async {
     if (mounted) setState(() => isLoadingNearby = true);
 
@@ -730,7 +682,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // ✅ جلب كل المتاجر النشطة
       final data = await supabase
           .from('markets')
-          .select()
+          .select('id, name, status, lat, lng')
           .eq('status', 'active');
 
       final markets = List<Map<String, dynamic>>.from(data);
@@ -802,14 +754,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final notifier = ref.read(appStateProvider.notifier);
     notifier.setMarket(market['id'] as String, market['name'] ?? '');
     await notifier.loadInitialData();
-    if (mounted) {
-      setState(() {
-        products = [];
-        isLoading = true;
-      });
-      loadProducts();
-      _loadCategories();
-    }
+    // ref.listen في build() يتولى إعادة التحميل عند تغيير marketId
   }
 
   Widget _buildEmptyState() {
@@ -880,207 +825,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => const NearbyMarketsSheet(),
-    );
-  }
-
-  Widget _buildMarketsList() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              "${nearbyMarkets.length} بقالة",
-              style: TextStyle(color: Colors.grey[500], fontSize: 13),
-            ),
-            const Row(
-              children: [
-                Text(
-                  "البقالات القريبة منك",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: Colors.black87,
-                  ),
-                ),
-                SizedBox(width: 6),
-                Icon(Icons.store_outlined, color: Color(0xFF004D40), size: 20),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        for (final m in nearbyMarkets) _buildMarketCard(m),
-      ],
-    );
-  }
-
-  Widget _buildMarketCard(Map<String, dynamic> market) {
-    final dist = (market['distance'] as double);
-    final distStr = dist > 0
-        ? (dist < 1
-              ? "${(dist * 1000).toInt()} م"
-              : "${dist.toStringAsFixed(1)} كم")
-        : "";
-    final name = (market['name'] ?? '').toString();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // زر الاختيار
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF004D40),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            onPressed: () => _selectMarket(market),
-            child: const Text(
-              "اختر",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            ),
-          ),
-
-          // المعلومات
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    name,
-                    textAlign: TextAlign.right,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: Color(0xFF004D40),
-                    ),
-                  ),
-                  if (distStr.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      distStr,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        color: Color(0xFF4CAF50),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-
-          // أيقونة
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE8F5E9),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.store_outlined,
-              color: Color(0xFF004D40),
-              size: 24,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLocationDenied() {
-    return Column(
-      children: [
-        const SizedBox(height: 30),
-        const Icon(Icons.location_off_outlined, size: 64, color: Colors.grey),
-        const SizedBox(height: 16),
-        const Text(
-          "لم يتم السماح بالوصول للموقع",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          "نحتاج موقعك لعرض البقالات القريبة منك",
-          style: TextStyle(color: Colors.grey[500], fontSize: 14),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 20),
-        ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF004D40),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          onPressed: () {
-            setState(() => locationDenied = false);
-            _loadNearbyMarkets();
-          },
-          icon: const Icon(Icons.my_location, size: 18),
-          label: const Text("السماح بالموقع"),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNoMarkets() {
-    return Column(
-      children: [
-        const SizedBox(height: 30),
-        const Text("😔", style: TextStyle(fontSize: 56)),
-        const SizedBox(height: 16),
-        const Text(
-          "لا توجد بقالات قريبة منك",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          "لا توجد بقالات في نطاق 3 كيلومتر حالياً\nسيتم إشعارك عند إضافة بقالة في حيك",
-          style: TextStyle(color: Colors.grey[500], fontSize: 14),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 20),
-        OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
-            side: const BorderSide(color: Color(0xFF004D40)),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          onPressed: _loadNearbyMarkets,
-          icon: const Icon(Icons.refresh, color: Color(0xFF004D40), size: 18),
-          label: const Text(
-            "إعادة البحث",
-            style: TextStyle(color: Color(0xFF004D40)),
-          ),
-        ),
-      ],
     );
   }
 

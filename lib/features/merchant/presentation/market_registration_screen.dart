@@ -71,8 +71,6 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
     super.dispose();
   }
 
-  String _buildEmail(String phone) => '${_normalizePhone(phone)}@haymarket.app';
-
   String _normalizePhone(String phone) {
     phone = phone
         .trim()
