@@ -12,6 +12,7 @@ import '../../merchant/presentation/merchant_pending_screen.dart';
 import '../../admin/presentation/admin_home_screen.dart';
 import 'register_screen.dart';
 import 'forgot_password_screen.dart';
+import 'package:flutter/services.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -27,6 +28,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final supabase = Supabase.instance.client;
   final _phoneCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  final FocusNode _phoneFocusNode = FocusNode();
 
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -37,6 +39,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void dispose() {
     _phoneCtrl.dispose();
     _passwordCtrl.dispose();
+    _phoneFocusNode.dispose();
     super.dispose();
   }
 
@@ -503,9 +506,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const SizedBox(height: 8),
               TextField(
                 controller: _phoneCtrl,
+                focusNode: _phoneFocusNode, // ✅ إضافة
                 keyboardType: TextInputType.phone,
                 textAlign: TextAlign.right,
-                enabled: !_phoneChecked,
+                readOnly: _phoneChecked,
+                // 🔥 منع الأرقام العربية
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
+                ],
                 onChanged: (_) {
                   if (_phoneChecked) {
                     setState(() {
@@ -537,17 +545,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     borderSide: BorderSide(color: Colors.grey.shade100),
                   ),
                   suffixIcon: _phoneChecked
-                      ? GestureDetector(
-                          onTap: () => setState(() {
-                            _phoneChecked = false;
-                            _phoneExists = false;
-                            _passwordCtrl.clear();
-                          }),
-                          child: const Icon(
+                      ? IconButton(
+                          icon: const Icon(
                             Icons.edit_outlined,
                             color: _primaryDark,
                             size: 20,
                           ),
+                          onPressed: () {
+                            setState(() {
+                              _phoneChecked = false;
+                              _phoneExists = false;
+                              _passwordCtrl.clear();
+                            });
+
+                            // 🔥 يفتح الكيبورد مباشرة
+                            FocusScope.of(
+                              context,
+                            ).requestFocus(_phoneFocusNode);
+                          },
                         )
                       : null,
                 ),

@@ -187,6 +187,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               Image.asset(
                 "assets/logo.png",
                 width: 130,
+                height: 130,
+                fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
                   return const Icon(Icons.store, size: 80, color: Colors.green);
                 },

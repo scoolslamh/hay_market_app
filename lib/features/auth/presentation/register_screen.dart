@@ -294,6 +294,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               hint: "example@email.com",
               icon: Icons.email_outlined,
               keyboardType: TextInputType.emailAddress,
+              isEnglish: true,
             ),
             const SizedBox(height: 16),
 
@@ -401,10 +402,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     required String hint,
     required IconData icon,
     TextInputType? keyboardType,
+    bool isEnglish = false,
   }) {
     return TextField(
       controller: controller,
       textAlign: TextAlign.right,
+      textDirection: TextDirection.rtl,
       keyboardType: keyboardType,
       decoration: InputDecoration(
         hintText: hint,
@@ -437,7 +440,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     return TextField(
       controller: controller,
       obscureText: obscure,
-      textAlign: TextAlign.right,
+
+      textAlign: TextAlign.left,
+      textDirection: TextDirection.ltr,
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(color: Colors.grey[400]),

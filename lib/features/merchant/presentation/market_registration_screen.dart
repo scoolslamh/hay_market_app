@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/utils/app_notification.dart';
 import '../../../core/services/auth_storage.dart';
 import 'merchant_pending_screen.dart';
+import 'package:flutter/services.dart';
 
 class MarketRegistrationScreen extends StatefulWidget {
   final String? inviteCode;
@@ -427,35 +428,51 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
           children: [
             _buildSectionTitle("بيانات المتجر"),
             const SizedBox(height: 16),
+
+            // اسم المتجر (عربي)
             _buildTextField(
               controller: _marketNameCtrl,
               label: "اسم المتجر *",
               icon: Icons.store_outlined,
               validator: (v) => v!.isEmpty ? "أدخل اسم المتجر" : null,
             ),
+
             const SizedBox(height: 12),
+
+            // اسم صاحب المتجر (عربي)
             _buildTextField(
               controller: _ownerNameCtrl,
               label: "اسم صاحب المتجر *",
               icon: Icons.person_outline,
               validator: (v) => v!.isEmpty ? "أدخل اسم صاحب المتجر" : null,
             ),
+
             const SizedBox(height: 12),
+
+            // رقم الجوال (إنجليزي 🔥)
             _buildTextField(
               controller: _ownerPhoneCtrl,
               label: "رقم الجوال *",
               icon: Icons.phone_outlined,
               keyboardType: TextInputType.phone,
+              isEnglish: true, // ✅ مهم
               validator: (v) => v!.length < 9 ? "أدخل رقم جوال صحيح" : null,
             ),
+
             const SizedBox(height: 12),
+
+            // رقم الترخيص (أفضل يكون إنجليزي 🔥)
             _buildTextField(
               controller: _licenseNumberCtrl,
               label: "رقم الترخيص التجاري *",
               icon: Icons.badge_outlined,
+              isEnglish: true, // ✅ مهم
               validator: (v) => v!.isEmpty ? "أدخل رقم الترخيص" : null,
             ),
+
             const SizedBox(height: 12),
+
+            // الحي (عربي)
             _buildTextField(
               controller: _neighborhoodNameCtrl,
               label: "الحي الذي يخدمه المتجر (اختياري)",
@@ -948,12 +965,15 @@ class _MarketRegistrationScreenState extends State<MarketRegistrationScreen> {
     required IconData icon,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
+    bool isEnglish = false,
   }) {
     return TextFormField(
       controller: controller,
-      textAlign: TextAlign.right,
+
       keyboardType: keyboardType,
       validator: validator,
+      textAlign: isEnglish ? TextAlign.left : TextAlign.right,
+      textDirection: isEnglish ? TextDirection.ltr : TextDirection.rtl,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: _primaryDark),
