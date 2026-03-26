@@ -851,11 +851,46 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       ),
       child: InkWell(
         onTap: () async {
+          final confirm = await showDialog<bool>(
+            context: context,
+            builder: (_) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: const Text(
+                "تأكيد تسجيل الخروج",
+                textAlign: TextAlign.center,
+              ),
+              content: const Text(
+                "هل أنت متأكد أنك تريد تسجيل الخروج؟",
+                textAlign: TextAlign.right,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text("إلغاء"),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text(
+                    "تسجيل الخروج",
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
+              ],
+            ),
+          );
+
+          if (confirm != true) return;
+
           final navigator = Navigator.of(context);
           await AuthStorage().logout();
+
           // ✅ إعادة تهيئة AppState لمسح بيانات الجلسة
           ref.read(appStateProvider.notifier).reset();
+
           if (!mounted) return;
+
           navigator.pushAndRemoveUntil(
             MaterialPageRoute(builder: (_) => const LoginScreen()),
             (route) => false,

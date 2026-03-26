@@ -440,10 +440,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                "أقسام البقالة",
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-              ),
               GestureDetector(
                 onTap: () => setState(() => selectedCategoryId = null),
                 child: const Text(
@@ -455,6 +451,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ),
               ),
+              const Text(
+                "أقسام البقالة",
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              ),
             ],
           ),
         ),
@@ -464,71 +464,76 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 height: 80,
                 child: Center(child: CircularProgressIndicator()),
               )
-            : SizedBox(
-                height: 95,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: categories.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 10),
-                  itemBuilder: (context, index) {
-                    final cat = categories[index];
-                    final isSelected = selectedCategoryId == cat['id'];
-                    return GestureDetector(
-                      onTap: () => setState(() {
-                        selectedCategoryId = isSelected
-                            ? null
-                            : cat['id'] as String;
-                      }),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        width: 80,
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? const Color(0xFF4CAF50).withValues(alpha: 0.12)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
+            : Directionality(
+                textDirection: TextDirection.rtl,
+                child: SizedBox(
+                  height: 95,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: categories.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 10),
+                    itemBuilder: (context, index) {
+                      final cat = categories[index];
+                      final isSelected = selectedCategoryId == cat['id'];
+                      return GestureDetector(
+                        onTap: () => setState(() {
+                          selectedCategoryId = isSelected
+                              ? null
+                              : cat['id'] as String;
+                        }),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: 80,
+                          decoration: BoxDecoration(
                             color: isSelected
-                                ? const Color(0xFF4CAF50)
-                                : Colors.grey.shade200,
-                            width: isSelected ? 1.5 : 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.05),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
+                                ? const Color(
+                                    0xFF4CAF50,
+                                  ).withValues(alpha: 0.12)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isSelected
+                                  ? const Color(0xFF4CAF50)
+                                  : Colors.grey.shade200,
+                              width: isSelected ? 1.5 : 1,
                             ),
-                          ],
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              cat['emoji'] ?? '📦',
-                              style: const TextStyle(fontSize: 28),
-                            ),
-                            const SizedBox(height: 5),
-                            Text(
-                              cat['name'] ?? '',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: isSelected
-                                    ? const Color(0xFF388E3C)
-                                    : Colors.black87,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
                               ),
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                cat['emoji'] ?? '📦',
+                                style: const TextStyle(fontSize: 28),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                cat['name'] ?? '',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: isSelected
+                                      ? const Color(0xFF388E3C)
+                                      : Colors.black87,
+                                ),
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               ),
 
