@@ -167,7 +167,7 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: categories.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (_, i) {
                 final cat = categories[i];
                 return Container(

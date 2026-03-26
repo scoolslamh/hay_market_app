@@ -150,7 +150,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                   child: ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (context, index) =>
                         _buildCartItem(items[index], cartService),
                   ),
@@ -189,7 +189,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                     ? CachedNetworkImage(
                         imageUrl: item.product.image ?? "",
                         fit: BoxFit.contain,
-                        placeholder: (_, __) => const Center(
+                        placeholder: (_, _) => const Center(
                           child: SizedBox(
                             width: 20,
                             height: 20,
@@ -199,7 +199,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                             ),
                           ),
                         ),
-                        errorWidget: (_, __, ___) => const Icon(
+                        errorWidget: (_, _, _) => const Icon(
                           Icons.image_not_supported_outlined,
                           color: Colors.grey,
                           size: 28,

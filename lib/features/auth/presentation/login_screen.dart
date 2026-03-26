@@ -155,7 +155,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           final storedEmail = userCheck['email']?.toString() ?? '';
           // ✅ إذا الإيميل وهمي (haymarket.app) أو فارغ → ابنه من الرقم
           if (storedEmail.contains('@haymarket.app') || storedEmail.isEmpty) {
-            realEmail = '${phone}@haymarket.app';
+            realEmail = '$phone@haymarket.app';
           } else {
             realEmail = storedEmail; // ✅ إيميل حقيقي
           }
@@ -465,7 +465,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     Image.asset(
                       'assets/logo.png',
                       width: 80,
-                      errorBuilder: (_, __, ___) => const Icon(
+                      errorBuilder: (_, _, _) => const Icon(
                         Icons.store,
                         size: 80,
                         color: Color(0xFF4CAF50),

@@ -187,7 +187,7 @@ class _NearbyMarketsSheetState extends ConsumerState<NearbyMarketsSheet> {
                 shrinkWrap: true,
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                 itemCount: markets.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
                 itemBuilder: (_, i) {
                   final m = markets[i];
                   final dist = m['distance'] as double;

@@ -84,7 +84,7 @@ class _AdminInviteCodesScreenState extends State<AdminInviteCodesScreen> {
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: codes.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (_, i) {
                 final code = codes[i];
                 final isUsed = code['is_used'] as bool? ?? false;

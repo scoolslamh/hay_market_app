@@ -14,7 +14,6 @@ import '../../../core/utils/app_notification.dart';
 import '../../auth/presentation/login_screen.dart';
 import '../../auth/presentation/map_picker_screen.dart';
 import '../../orders/presentation/orders_screen.dart';
-import '../../location/presentation/edit_location_screen.dart';
 import '../../daftar/presentation/daftar_screen.dart';
 
 class AccountScreen extends ConsumerStatefulWidget {

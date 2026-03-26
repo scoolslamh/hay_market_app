@@ -184,7 +184,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
 
                   // ✅ القسم
                   DropdownButtonFormField<String>(
-                    value: selectedCategoryId,
+                    initialValue: selectedCategoryId,
                     isExpanded: true,
                     decoration: InputDecoration(
                       labelText: "القسم (اختياري)",
@@ -503,7 +503,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: filteredItems.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (context, i) =>
                         _buildWarehouseItem(filteredItems[i]),
                   ),

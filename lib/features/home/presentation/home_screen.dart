@@ -471,7 +471,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   physics: const BouncingScrollPhysics(),
                   itemCount: categories.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  separatorBuilder: (_, _) => const SizedBox(width: 10),
                   itemBuilder: (context, index) {
                     final cat = categories[index];
                     final isSelected = selectedCategoryId == cat['id'];
@@ -853,7 +853,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: Image.asset(
           'assets/logo.png',
           fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => const Center(
+          errorBuilder: (_, _, _) => const Center(
             child: Icon(
               Icons.storefront_outlined,
               color: Color(0xFF4CAF50),
@@ -908,7 +908,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         fadeInDuration: const Duration(milliseconds: 300),
                         fadeOutDuration: const Duration(milliseconds: 100),
                         // ✅ عند خطأ التحميل → شعار التطبيق
-                        errorWidget: (_, __, ___) => _buildLogoPlaceholder(),
+                        errorWidget: (_, _, _) => _buildLogoPlaceholder(),
                       )
                     // ✅ لا توجد صورة → شعار التطبيق
                     : _buildLogoPlaceholder(),

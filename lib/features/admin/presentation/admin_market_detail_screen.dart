@@ -657,8 +657,7 @@ class _AdminMarketDetailScreenState extends State<AdminMarketDetailScreen> {
                             market['license_image_url'],
                             height: 120,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                const Icon(Icons.error),
+                            errorBuilder: (_, _, _) => const Icon(Icons.error),
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -681,8 +680,7 @@ class _AdminMarketDetailScreenState extends State<AdminMarketDetailScreen> {
                             market['store_image_url'],
                             height: 120,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                const Icon(Icons.error),
+                            errorBuilder: (_, _, _) => const Icon(Icons.error),
                           ),
                         ),
                         const SizedBox(height: 6),

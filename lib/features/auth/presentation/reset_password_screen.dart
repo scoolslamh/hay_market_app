@@ -32,8 +32,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   String? _validatePassword(String password) {
     if (password.length < 6) return "كلمة المرور 6 أحرف على الأقل";
-    if (!password.contains(RegExp(r'[A-Z]')))
+    if (!password.contains(RegExp(r'[A-Z]'))) {
       return "يجب أن تحتوي على حرف كبير";
+    }
     if (!password.contains(RegExp(r'[0-9]'))) return "يجب أن تحتوي على رقم";
     return null;
   }

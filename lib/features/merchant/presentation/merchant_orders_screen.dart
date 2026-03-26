@@ -216,7 +216,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen>
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: orders.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) => _buildOrderCard(orders[index]),
       ),
     );

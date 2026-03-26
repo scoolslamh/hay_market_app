@@ -236,7 +236,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                         imageUrl!,
                         fit: BoxFit.cover,
                         width: double.infinity,
-                        errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                        errorBuilder: (_, _, _) => _buildPlaceholder(),
                       )
                     : _buildPlaceholder(),
               ),
@@ -314,7 +314,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
           // ── القسم ──
           DropdownButtonFormField<String>(
-            value: selectedCategoryId,
+            initialValue: selectedCategoryId,
             isExpanded: true,
             decoration: InputDecoration(
               labelText: "القسم (اختياري)",
