@@ -250,12 +250,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // السطر الأول: اسم الحي بدون إضافة كلمة "حي"
+                  // 🔹 السطر الأول: عنوان ثابت
+                  const Text(
+                    "موقع التوصيل",
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+
+                  const SizedBox(height: 2),
+
+                  // 🔹 السطر الثاني: اسم الحي
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        appState.neighborhoodName ?? "موقع التوصيل",
+                        appState.neighborhoodName ?? "",
                         style: const TextStyle(
                           fontSize: 11,
                           color: Colors.grey,
@@ -269,7 +277,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     ],
                   ),
-                  // السطر الثاني: العنوان التفصيلي من الخريطة
+
+                  const SizedBox(height: 2),
+
+                  // 🔹 السطر الثالث: العنوان التفصيلي
                   if (_deliveryAddress != null)
                     SizedBox(
                       width: 140,
