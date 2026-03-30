@@ -556,27 +556,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ),
 
-        // ── عنوان المنتجات مع اسم القسم المختار ──
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                selectedCategoryId != null
-                    ? categories.firstWhere(
-                        (c) => c['id'] == selectedCategoryId,
-                        orElse: () => {'name': 'المنتجات'},
-                      )['name']
-                    : "جميع المنتجات",
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              // 👈 يسار: عدد المنتجات
               Text(
                 "${filteredProducts.length} منتج",
                 style: const TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+
+              // 👉 يمين: العنوان + الوصف
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const Text(
+                    "المنتجات",
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    selectedCategoryId != null
+                        ? categories.firstWhere(
+                            (c) => c['id'] == selectedCategoryId,
+                            orElse: () => {'name': 'جميع المنتجات'},
+                          )['name']
+                        : "جميع المنتجات",
+                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                ],
               ),
             ],
           ),
