@@ -12,6 +12,11 @@ import '../../markets/presentation/markets_screen.dart';
 import '../../../core/utils/app_notification.dart';
 import '../../../core/widgets/nearby_markets_sheet.dart';
 
+import 'package:hay_market_app/core/services/offer_service.dart';
+import 'package:hay_market_app/core/models/offer.dart';
+import 'package:carousel_slider/carousel_slider.dart';
+import '../../offers/presentation/offers_screen.dart';
+
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -21,11 +26,15 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final productService = ProductService();
+  final offerService = OfferService();
   final supabase = Supabase.instance.client;
 
   List<Product> products = [];
   bool isLoading = true;
   String? lastLoadedMarketId;
+
+  List<Offer> offers = [];
+  bool isLoadingOffers = true;
 
   // ✅ البقالات القريبة
   List<Map<String, dynamic>> nearbyMarkets = [];
@@ -65,6 +74,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _loadCategories();
       }
       _loadDeliveryAddress();
+      loadOffers();
     });
   }
 
@@ -138,6 +148,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  Future<void> loadOffers() async {
+    final marketId = ref.read(appStateProvider).marketId;
+
+    if (marketId == null) return;
+
+    if (mounted) setState(() => isLoadingOffers = true);
+
+    try {
+      final data = await offerService.getOffers(marketId);
+
+      if (mounted) {
+        setState(() {
+          offers = data;
+          isLoadingOffers = false;
+        });
+      }
+      print("offers: ${offers.length}");
+    } catch (e) {
+      debugPrint("loadOffers ERROR: $e");
+      if (mounted) setState(() => isLoadingOffers = false);
+    }
+  }
+
   void goBackToMarkets() {
     Navigator.pushReplacement(
       context,
@@ -160,6 +193,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         });
         loadProducts();
         _loadCategories();
+        loadOffers();
       }
     });
 
@@ -378,72 +412,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         // ── حقل البحث ──
         _buildSearchBar(),
 
-        // ── البنر الإعلاني ──
-        Container(
-          margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-          height: 100,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF43A047), Color(0xFF66BB6A)],
-              begin: Alignment.centerRight,
-              end: Alignment.centerLeft,
-            ),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // زر تسوق الآن - بعرض محدد
-                SizedBox(
-                  width: 110,
-                  child: ElevatedButton(
-                    onPressed: () {},
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFF388E3C),
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                    child: const Text(
-                      "تسوق الآن",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      "عروض وخصومات حصرية",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      "اكتشف الجديد في المتجر",
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+        // ── شريط العروض ──
+        _buildOffersSlider(),
 
         // ── أقسام البقالة (تمرير أفقي) ──
         Padding(
@@ -547,14 +517,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ),
               ),
-
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
-          child: Text(
-            "المنتجات",
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-          ),
-        ),
 
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
@@ -1023,6 +985,70 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildOffersSlider() {
+    if (isLoadingOffers) {
+      return const SizedBox(
+        height: 120,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (offers.isEmpty) {
+      return const SizedBox(); // لا يظهر شيء
+    }
+
+    return CarouselSlider(
+      options: CarouselOptions(
+        height: 130,
+        autoPlay: true,
+        enlargeCenterPage: true,
+        viewportFraction: 0.9,
+      ),
+      items: offers.map((offer) {
+        return GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const OffersScreen(),
+            ),
+          ),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              image: DecorationImage(
+                image: NetworkImage(offer.imageUrl),
+                fit: BoxFit.cover,
+              ),
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.black.withValues(alpha: 0.4),
+                    Colors.transparent,
+                  ],
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                ),
+              ),
+              alignment: Alignment.bottomRight,
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                offer.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

@@ -4,6 +4,7 @@ import '../../../core/services/auth_storage.dart';
 import '../../auth/presentation/login_screen.dart';
 import 'merchant_orders_screen.dart';
 import 'merchant_products_screen.dart';
+import 'merchant_offers_screen.dart';
 import 'warehouse_screen.dart';
 import 'daftar_management_screen.dart';
 
@@ -154,6 +155,10 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
           : currentIndex == 2
           ? const MerchantProductsScreen()
           : currentIndex == 3
+          ? (marketId != null
+              ? MerchantOffersScreen(marketId: marketId!)
+              : const Center(child: CircularProgressIndicator()))
+          : currentIndex == 4
           ? const WarehouseScreen()
           : const DaftarManagementScreen(),
       bottomNavigationBar: _buildBottomNav(),
@@ -542,6 +547,11 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
           icon: Icon(Icons.inventory_2_outlined),
           activeIcon: Icon(Icons.inventory_2),
           label: "المنتجات",
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.local_offer_outlined),
+          activeIcon: Icon(Icons.local_offer),
+          label: "العروض",
         ),
         const BottomNavigationBarItem(
           icon: Icon(Icons.warehouse_outlined),

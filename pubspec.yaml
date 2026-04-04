@@ -24,8 +24,10 @@ dependencies:
   geolocator: ^10.1.0
   geocoding: ^2.1.1
   url_launcher: ^6.2.5
-  app_links: ^6.0.0   # ✅ هنا الصحيح
-
+  app_links: ^6.0.0   # 
+  carousel_slider: ^5.0.0
+  
+  
 dev_dependencies:
   flutter_test:
     sdk: flutter
