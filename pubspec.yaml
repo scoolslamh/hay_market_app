@@ -51,14 +51,13 @@ flutter:
 
 # ── شاشة البداية ──
 flutter_native_splash:
-  color: "#ffffff"
-  image: assets/logo.png
+  color: "#004D40"
+  image: assets/tamenat.png
   android: true
   ios: true
   android_12:
-    image: assets/logo.png
-    color: "#ffffff"
-    image_padding_percent: 30
+    image: assets/tamenat.png
+    color: "#004D40"
 
 # ── أيقونة التطبيق ──
 flutter_launcher_icons:

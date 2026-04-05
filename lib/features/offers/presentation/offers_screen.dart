@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/models/offer.dart';
 import '../../../core/models/product.dart';
@@ -24,7 +23,6 @@ class _OffersScreenState extends ConsumerState<OffersScreen> {
   List<Offer> offers = [];
   bool isLoading = true;
   String? errorMsg;
-  String? _marketImageUrl;
 
   @override
   void initState() {
@@ -46,26 +44,14 @@ class _OffersScreenState extends ConsumerState<OffersScreen> {
       errorMsg = null;
     });
     try {
-      final offersFuture = OfferService().getOffers(marketId);
-      final marketFuture = Supabase.instance.client
-          .from('markets')
-          .select('store_image_url')
-          .eq('id', marketId)
-          .maybeSingle();
-      final results =
-          await Future.wait<dynamic>([offersFuture, marketFuture]);
-      if (mounted) {
-        setState(() {
-          offers = results[0] as List<Offer>;
-          final market = results[1] as Map<String, dynamic>?;
-          _marketImageUrl = market?['store_image_url'] as String?;
-        });
-      }
+      final data = await OfferService().getOffers(marketId);
+      if (mounted) setState(() => offers = data);
     } catch (e) {
       if (mounted) setState(() => errorMsg = "تعذّر تحميل العروض");
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
+
   }
 
   @override
@@ -176,14 +162,13 @@ class _OffersScreenState extends ConsumerState<OffersScreen> {
                     ],
                   ),
                   clipBehavior: Clip.antiAlias,
-                  child: _marketImageUrl != null &&
-                          _marketImageUrl!.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: _marketImageUrl!,
-                          fit: BoxFit.cover,
-                          errorWidget: (_, _, _) => _logoFallback(),
-                        )
-                      : _logoFallback(),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Image.asset(
+                      'assets/tamenat.png',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
                 ),
 
                 const SizedBox(height: 18),
@@ -321,20 +306,6 @@ class _OffersScreenState extends ConsumerState<OffersScreen> {
     );
   }
 
-  Widget _logoFallback() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Image.asset(
-        'assets/logo.png',
-        fit: BoxFit.contain,
-        errorBuilder: (_, _, _) => const Icon(
-          Icons.store_outlined,
-          color: Color(0xFF004D40),
-          size: 48,
-        ),
-      ),
-    );
-  }
 
   Widget _buildOfferCard(Offer offer, CartService cartService) {
     final hasPrice =

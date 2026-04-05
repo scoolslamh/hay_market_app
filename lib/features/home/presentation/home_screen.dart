@@ -151,24 +151,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> loadOffers() async {
     final marketId = ref.read(appStateProvider).marketId;
 
-    if (marketId == null) return;
+    if (marketId == null) {
+      if (mounted) setState(() => isLoadingOffers = false);
+      return;
+    }
 
     if (mounted) setState(() => isLoadingOffers = true);
 
     try {
       final data = await offerService.getOffers(marketId);
-
       if (mounted) {
         setState(() {
           offers = data;
           isLoadingOffers = false;
         });
       }
-      print("offers: ${offers.length}");
     } catch (e) {
       debugPrint("loadOffers ERROR: $e");
       if (mounted) setState(() => isLoadingOffers = false);
     }
+
   }
 
   void goBackToMarkets() {
@@ -991,13 +993,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _buildOffersSlider(CartService cartService) {
     if (isLoadingOffers) {
       return const SizedBox(
-        height: 160,
-        child: Center(child: CircularProgressIndicator()),
+        height: 150,
+        child: Center(
+          child: CircularProgressIndicator(color: Color(0xFF004D40)),
+        ),
       );
     }
 
     if (offers.isEmpty) {
-      return const SizedBox();
+      return _buildNoOffersCard();
     }
 
     return Directionality(
@@ -1194,6 +1198,144 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         );
       }).toList(),
     ),
+    );
+  }
+
+  Widget _buildNoOffersCard() {
+    final marketName = ref.read(appStateProvider).marketName ?? "المتجر";
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF004D40), Color(0xFF00796B)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF004D40).withValues(alpha: 0.3),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Stack(
+          children: [
+            // دوائر زخرفية خلفية
+            Positioned(
+              top: -20,
+              left: -20,
+              child: Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.06),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: -15,
+              right: -15,
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.06),
+                ),
+              ),
+            ),
+
+            // المحتوى
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 18, vertical: 16),
+              child: Row(
+                textDirection: TextDirection.rtl,
+                children: [
+                  // أيقونة ثابتة
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.8),
+                          width: 2),
+                    ),
+                    padding: const EdgeInsets.all(10),
+                    child: Image.asset(
+                      'assets/tamenat.png',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+
+                  const SizedBox(width: 14),
+
+                  // النصوص
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          marketName,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          "انتظروا عروضنا",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "قريباً أفضل العروض والخصومات لكم",
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.75),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(width: 12),
+
+                  // أيقونة ساعة
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.15),
+                    ),
+                    child: const Icon(
+                      Icons.hourglass_top_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
