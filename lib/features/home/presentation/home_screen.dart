@@ -1000,7 +1000,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return const SizedBox();
     }
 
-    return CarouselSlider(
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: CarouselSlider(
       options: CarouselOptions(
         height: 170,
         autoPlay: true,
@@ -1191,6 +1193,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         );
       }).toList(),
+    ),
     );
   }
 

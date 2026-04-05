@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/models/offer.dart';
 import '../../../core/models/product.dart';
@@ -23,6 +24,7 @@ class _OffersScreenState extends ConsumerState<OffersScreen> {
   List<Offer> offers = [];
   bool isLoading = true;
   String? errorMsg;
+  String? _marketImageUrl;
 
   @override
   void initState() {
@@ -44,8 +46,21 @@ class _OffersScreenState extends ConsumerState<OffersScreen> {
       errorMsg = null;
     });
     try {
-      final data = await OfferService().getOffers(marketId);
-      if (mounted) setState(() => offers = data);
+      final offersFuture = OfferService().getOffers(marketId);
+      final marketFuture = Supabase.instance.client
+          .from('markets')
+          .select('store_image_url')
+          .eq('id', marketId)
+          .maybeSingle();
+      final results =
+          await Future.wait<dynamic>([offersFuture, marketFuture]);
+      if (mounted) {
+        setState(() {
+          offers = results[0] as List<Offer>;
+          final market = results[1] as Map<String, dynamic>?;
+          _marketImageUrl = market?['store_image_url'] as String?;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => errorMsg = "تعذّر تحميل العروض");
     } finally {
@@ -122,17 +137,201 @@ class _OffersScreenState extends ConsumerState<OffersScreen> {
   }
 
   Widget _buildEmpty() {
-    return Center(
+    final marketName =
+        ref.read(appStateProvider).marketName ?? "المتجر";
+
+    return SingleChildScrollView(
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.local_offer_outlined, size: 64, color: Colors.grey[300]),
-          const SizedBox(height: 12),
-          const Text(
-            "لا توجد عروض متاحة حالياً",
-            style: TextStyle(color: Colors.grey, fontSize: 15),
+          // ── الجزء العلوي بتدرج ──
+          Container(
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF004D40), Color(0xFF00796B)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.vertical(
+                bottom: Radius.circular(36),
+              ),
+            ),
+            padding: const EdgeInsets.fromLTRB(24, 40, 24, 48),
+            child: Column(
+              children: [
+                // شعار المتجر
+                Container(
+                  width: 110,
+                  height: 110,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    border: Border.all(color: Colors.white, width: 4),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: _marketImageUrl != null &&
+                          _marketImageUrl!.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: _marketImageUrl!,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, _, _) => _logoFallback(),
+                        )
+                      : _logoFallback(),
+                ),
+
+                const SizedBox(height: 18),
+
+                // اسم المتجر
+                Text(
+                  marketName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+
+                const SizedBox(height: 6),
+
+                // شريط زخرفي
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                        width: 30,
+                        height: 2,
+                        color: Colors.white.withValues(alpha: 0.4)),
+                    const SizedBox(width: 8),
+                    Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4CAF50),
+                          shape: BoxShape.circle,
+                        )),
+                    const SizedBox(width: 8),
+                    Container(
+                        width: 30,
+                        height: 2,
+                        color: Colors.white.withValues(alpha: 0.4)),
+                  ],
+                ),
+              ],
+            ),
           ),
+
+          const SizedBox(height: 40),
+
+          // ── بطاقة العبارة الرئيسية ──
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                  vertical: 32, horizontal: 20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.07),
+                    blurRadius: 20,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  // أيقونة ساعة رملية مع لون
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E9),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.hourglass_top_rounded,
+                      size: 36,
+                      color: Color(0xFF004D40),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  const Text(
+                    "انتظروا عروضنا",
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF004D40),
+                      letterSpacing: 1,
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  Text(
+                    "نعمل على تحضير أفضل العروض والخصومات\nخصيصاً لكم، ترقّبوا المفاجآت!",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[500],
+                      height: 1.7,
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // شريط زخرفي سفلي
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(5, (i) {
+                      final isMiddle = i == 2;
+                      return Container(
+                        margin:
+                            const EdgeInsets.symmetric(horizontal: 3),
+                        width: isMiddle ? 20 : 8,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: isMiddle
+                              ? const Color(0xFF4CAF50)
+                              : const Color(0xFFB2DFDB),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      );
+                    }),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 32),
         ],
+      ),
+    );
+  }
+
+  Widget _logoFallback() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Image.asset(
+        'assets/logo.png',
+        fit: BoxFit.contain,
+        errorBuilder: (_, _, _) => const Icon(
+          Icons.store_outlined,
+          color: Color(0xFF004D40),
+          size: 48,
+        ),
       ),
     );
   }
@@ -280,116 +479,93 @@ class _OffersScreenState extends ConsumerState<OffersScreen> {
             ),
 
           // ── تفاصيل السعر والزر ──
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // زر إضافة للسلة
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _primaryDark,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  icon: const Icon(Icons.add_shopping_cart, size: 18),
-                  label: const Text(
-                    "أضف للسلة",
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                  onPressed: () {
-                    final effectivePrice = offer.discountedPrice ??
-                        offer.originalPrice ??
-                        0.0;
-                    final product = Product(
-                      id: offer.productId ?? offer.id,
-                      name: offer.productName ?? offer.title,
-                      price: effectivePrice,
-                      image: offer.imageUrl,
-                    );
-                    cartService.addToCart(product);
-                    AppNotification.success(
-                      context,
-                      "تمت إضافة ${product.name} للسلة",
-                    );
-                  },
-                ),
-
-                // السعر
-                if (hasPrice)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Row(
-                        children: [
-                          const Text("﷼",
-                              style: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 11,
-                                  decoration: TextDecoration.lineThrough)),
-                          const SizedBox(width: 2),
-                          Text(
-                            _fmt(offer.originalPrice!),
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 13,
-                              decoration: TextDecoration.lineThrough,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          const Text("﷼",
-                              style: TextStyle(
-                                color: _primary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                              )),
-                          const SizedBox(width: 2),
-                          Text(
-                            _fmt(offer.discountedPrice!),
-                            style: const TextStyle(
-                              color: _primary,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  )
-                else if (offer.discountedPrice != null ||
-                    offer.originalPrice != null)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const Text("﷼",
-                          style: TextStyle(
+          Directionality(
+            textDirection: TextDirection.rtl,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // ── الأسعار ──
+                  if (hasPrice) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        // السعر بعد الخصم
+                        Text(
+                          "${_fmt(offer.discountedPrice!)} ﷼",
+                          style: const TextStyle(
                             color: _primary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          )),
-                      const SizedBox(width: 2),
-                      Text(
-                        _fmt(offer.discountedPrice ?? offer.originalPrice!),
-                        style: const TextStyle(
-                          color: _primary,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        // السعر الأصلي مشطوب
+                        Text(
+                          "${_fmt(offer.originalPrice!)} ﷼",
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 14,
+                            decoration: TextDecoration.lineThrough,
+                            decorationColor: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ] else if (offer.originalPrice != null ||
+                      offer.discountedPrice != null) ...[
+                    Text(
+                      "${_fmt(offer.discountedPrice ?? offer.originalPrice!)} ﷼",
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        color: _primary,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
+                  // ── زر إضافة للسلة ──
+                  SizedBox(
+                    height: 46,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _primaryDark,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                    ],
+                      icon: const Icon(Icons.add_shopping_cart, size: 18),
+                      label: const Text(
+                        "أضف للسلة",
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      onPressed: () {
+                        final effectivePrice = offer.discountedPrice ??
+                            offer.originalPrice ??
+                            0.0;
+                        final product = Product(
+                          id: offer.productId ?? offer.id,
+                          name: offer.productName ?? offer.title,
+                          price: effectivePrice,
+                          image: offer.imageUrl,
+                        );
+                        cartService.addToCart(product);
+                        AppNotification.success(
+                          context,
+                          "تمت إضافة ${product.name} للسلة",
+                        );
+                      },
+                    ),
                   ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
