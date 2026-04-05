@@ -20,9 +20,9 @@ class OfferService {
 
       debugPrint('OfferService.getOffers: ${data.length} offers for $marketId');
 
-      return List<Map<String, dynamic>>.from(data)
-          .map((e) => Offer.fromMap(e))
-          .toList();
+      return List<Map<String, dynamic>>.from(
+        data,
+      ).map((e) => Offer.fromMap(e)).toList();
     } catch (e) {
       debugPrint('OfferService.getOffers error: $e');
       // إرجاع قائمة فارغة بدل رمي exception حتى لا تفشل الصفحة
