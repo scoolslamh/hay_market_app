@@ -14,7 +14,6 @@ class DaftarScreen extends ConsumerStatefulWidget {
 
 class _DaftarScreenState extends ConsumerState<DaftarScreen> {
   static const Color _primary = Color(0xFF4CAF50);
-  static const Color _primaryDark = Color(0xFF004D40);
   static const Color _daftar = Color(0xFF1565C0); // أزرق للدفتر
 
   final supabase = Supabase.instance.client;
@@ -23,6 +22,8 @@ class _DaftarScreenState extends ConsumerState<DaftarScreen> {
   List<Map<String, dynamic>> transactions = [];
   bool isLoading = true;
   bool hasApplied = false;
+  String? _selectedMonthKey;
+  List<String> _monthKeys = [];
 
   @override
   void initState() {
@@ -53,6 +54,22 @@ class _DaftarScreenState extends ConsumerState<DaftarScreen> {
             .limit(50);
         txList = List<Map<String, dynamic>>.from(tx);
       }
+
+      // استخراج الأشهر
+      final Set<String> months = {};
+      for (final tx in txList) {
+        final dt = DateTime.tryParse(tx['created_at'].toString())?.toLocal();
+        if (dt != null) {
+          months.add('${dt.year}-${dt.month.toString().padLeft(2, '0')}');
+        }
+      }
+      final sorted = months.toList()..sort((a, b) => b.compareTo(a));
+      final now = DateTime.now();
+      final currentKey = '${now.year}-${now.month.toString().padLeft(2, '0')}';
+      _monthKeys = sorted;
+      _selectedMonthKey = sorted.contains(currentKey)
+          ? currentKey
+          : (sorted.isNotEmpty ? sorted.first : currentKey);
 
       if (mounted) {
         setState(() {
@@ -112,6 +129,28 @@ class _DaftarScreenState extends ConsumerState<DaftarScreen> {
     } catch (_) {
       return null;
     }
+  }
+
+  List<Map<String, dynamic>> get _filteredTransactions {
+    if (_selectedMonthKey == null) return transactions;
+    return transactions.where((tx) {
+      final dt = DateTime.tryParse(tx['created_at'].toString())?.toLocal();
+      if (dt == null) return false;
+      return '${dt.year}-${dt.month.toString().padLeft(2, '0')}' == _selectedMonthKey;
+    }).toList();
+  }
+
+  Map<String, double> get _monthSummary {
+    double orders = 0, payments = 0;
+    for (final tx in _filteredTransactions) {
+      final amount = (tx['amount'] as num?)?.toDouble() ?? 0;
+      if (tx['type'] == 'order') {
+        orders += amount;
+      } else {
+        payments += amount;
+      }
+    }
+    return {'orders': orders, 'payments': payments};
   }
 
   String _statusText(String status) {
@@ -466,6 +505,88 @@ class _DaftarScreenState extends ConsumerState<DaftarScreen> {
 
         const SizedBox(height: 16),
 
+        // ── تبويبات الأشهر ──
+        if (_monthKeys.isNotEmpty) ...[
+          const Align(
+            alignment: Alignment.centerRight,
+            child: Text('الأشهر',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black54)),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 38,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              reverse: true,
+              physics: const BouncingScrollPhysics(),
+              itemCount: _monthKeys.length,
+              separatorBuilder: (context, index) => const SizedBox(width: 8),
+              itemBuilder: (_, i) {
+                final key = _monthKeys[i];
+                final isSelected = key == _selectedMonthKey;
+                final parts = key.split('-');
+                final month = int.parse(parts[1]);
+                final year = int.parse(parts[0]);
+                const names = ['','يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+                final now = DateTime.now();
+                final currentKey = '${now.year}-${now.month.toString().padLeft(2, '0')}';
+                final label = key == currentKey ? 'هذا الشهر' : (year == now.year ? names[month] : '${names[month]} $year');
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedMonthKey = key),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected ? _daftar : Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: isSelected ? _daftar : Colors.grey.shade200),
+                      boxShadow: isSelected ? [BoxShadow(color: _daftar.withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0,3))] : [],
+                    ),
+                    child: Text(label,
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : Colors.grey[600],
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontSize: 13,
+                      )),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── ملخص الشهر ──
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0,2))],
+            ),
+            child: Row(
+              textDirection: TextDirection.rtl,
+              children: [
+                Expanded(child: Column(children: [
+                  const Icon(Icons.shopping_bag_outlined, color: Colors.red, size: 20),
+                  const SizedBox(height: 4),
+                  Text('${_monthSummary['orders']!.toInt()} ﷼',
+                    style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w900, fontSize: 14)),
+                  Text('الطلبات', style: TextStyle(color: Colors.grey[500], fontSize: 10)),
+                ])),
+                Container(width: 1, height: 40, color: Colors.grey[200]),
+                Expanded(child: Column(children: [
+                  Icon(Icons.payments_outlined, color: _primary, size: 20),
+                  const SizedBox(height: 4),
+                  Text('${_monthSummary['payments']!.toInt()} ﷼',
+                    style: TextStyle(color: _primary, fontWeight: FontWeight.w900, fontSize: 14)),
+                  Text('المدفوع', style: TextStyle(color: Colors.grey[500], fontSize: 10)),
+                ])),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+
         // تنبيه التجميد
         if (status == 'frozen')
           Container(
@@ -536,18 +657,12 @@ class _DaftarScreenState extends ConsumerState<DaftarScreen> {
         ),
         const SizedBox(height: 10),
 
-        if (transactions.isEmpty)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(30),
-              child: Text(
-                "لا توجد معاملات بعد",
-                style: TextStyle(color: Colors.grey[400], fontSize: 14),
-              ),
-            ),
-          )
-        else
-          ...transactions.map((tx) => _buildTransactionItem(tx)),
+        ...(_filteredTransactions.isEmpty
+            ? [Center(child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text('لا توجد معاملات في هذا الشهر',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 14))))]
+            : _filteredTransactions.map((tx) => _buildTransactionItem(tx)).toList()),
       ],
     );
   }

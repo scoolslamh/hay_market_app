@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/auth_storage.dart';
 import '../../../core/utils/app_notification.dart';
+import 'daftar_client_detail_screen.dart';
 
 class DaftarManagementScreen extends StatefulWidget {
   const DaftarManagementScreen({super.key});
@@ -200,6 +201,7 @@ class _DaftarManagementScreenState extends State<DaftarManagementScreen>
         title: Text("تأكيد سداد ${daftar['customer_name'] ?? ''}"),
         content: Text(
           "المبلغ المستحق: $balanceStr ﷼\nهل تأكد استلام المبلغ كاملاً؟",
+          textDirection: TextDirection.rtl,
           textAlign: TextAlign.right,
         ),
         actions: [
@@ -436,160 +438,171 @@ class _DaftarManagementScreenState extends State<DaftarManagementScreen>
     final progress = limit > 0 ? (balance / limit).clamp(0.0, 1.0) : 0.0;
     final name = daftar['customer_name'] ?? daftar['customer_phone'] ?? '';
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          children: [
-            // الاسم والرصيد
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // الرصيد
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "${balance.toStringAsFixed(1)} ﷼",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: balance > 0 ? Colors.red : _primary,
-                      ),
-                    ),
-                    Text(
-                      "من ${limit.toStringAsFixed(0)} ﷼",
-                      style: TextStyle(color: Colors.grey[400], fontSize: 11),
-                    ),
-                  ],
+    return GestureDetector(
+      onTap: (type == 'approved' || type == 'frozen')
+          ? () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      DaftarClientDetailScreen(daftar: daftar),
                 ),
-                // الاسم والهاتف
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                        color: Colors.black87,
+              ).then((_) => _loadData())
+          : null,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            children: [
+              // الاسم والرصيد
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // الرصيد
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "${balance.toStringAsFixed(1)} ﷼",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: balance > 0 ? Colors.red : _primary,
+                        ),
                       ),
-                    ),
-                    Text(
-                      daftar['customer_phone'] ?? '',
-                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                    ),
-                  ],
+                      Text(
+                        "من ${limit.toStringAsFixed(0)} ﷼",
+                        style: TextStyle(color: Colors.grey[400], fontSize: 11),
+                      ),
+                    ],
+                  ),
+                  // الاسم والهاتف
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      Text(
+                        daftar['customer_phone'] ?? '',
+                        style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+
+              if (type == 'approved') ...[
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    backgroundColor: Colors.grey[100],
+                    color: progress > 0.8 ? Colors.red : _daftar,
+                    minHeight: 5,
+                  ),
                 ),
               ],
-            ),
 
-            if (type == 'approved') ...[
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  backgroundColor: Colors.grey[100],
-                  color: progress > 0.8 ? Colors.red : _daftar,
-                  minHeight: 5,
+              const SizedBox(height: 12),
+
+              // الأزرار
+              if (type == 'pending')
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => _reject(daftar),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.red),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text(
+                          "رفض",
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
+                        onPressed: () => _approve(daftar),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _daftar,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text("اعتماد"),
+                      ),
+                    ),
+                  ],
+                )
+              else if (type == 'approved')
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _editLimit(daftar),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Colors.grey.shade300),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        icon: const Icon(
+                          Icons.edit_outlined,
+                          size: 16,
+                          color: Colors.grey,
+                        ),
+                        label: const Text(
+                          "تعديل الحد",
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else if (type == 'frozen')
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _confirmPayment(daftar),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    icon: const Icon(Icons.check_circle_outline, size: 18),
+                    label: const Text("تأكيد السداد"),
+                  ),
                 ),
-              ),
             ],
-
-            const SizedBox(height: 12),
-
-            // الأزرار
-            if (type == 'pending')
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => _reject(daftar),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.red),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: const Text(
-                        "رفض",
-                        style: TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton(
-                      onPressed: () => _approve(daftar),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _daftar,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: const Text("اعتماد"),
-                    ),
-                  ),
-                ],
-              )
-            else if (type == 'approved')
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _editLimit(daftar),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: Colors.grey.shade300),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      icon: const Icon(
-                        Icons.edit_outlined,
-                        size: 16,
-                        color: Colors.grey,
-                      ),
-                      label: const Text(
-                        "تعديل الحد",
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            else if (type == 'frozen')
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => _confirmPayment(daftar),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  icon: const Icon(Icons.check_circle_outline, size: 18),
-                  label: const Text("تأكيد السداد"),
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );

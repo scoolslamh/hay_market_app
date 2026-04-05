@@ -136,6 +136,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                   TextField(
                     controller: priceController,
                     keyboardType: TextInputType.number,
+                    textDirection: TextDirection.rtl,
                     textAlign: TextAlign.right,
                     decoration: InputDecoration(
                       labelText: "السعر ﷼",
@@ -161,6 +162,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                   TextField(
                     controller: stockController,
                     keyboardType: TextInputType.number,
+                    textDirection: TextDirection.rtl,
                     textAlign: TextAlign.right,
                     decoration: InputDecoration(
                       labelText: "الكمية في المخزون",
@@ -329,6 +331,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: nameController,
+                textDirection: TextDirection.rtl,
                 textAlign: TextAlign.right,
                 decoration: InputDecoration(
                   labelText: "اسم المنتج",
@@ -348,6 +351,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: imageController,
+                textDirection: TextDirection.rtl,
                 textAlign: TextAlign.right,
                 decoration: InputDecoration(
                   labelText: "رابط الصورة (اختياري)",
@@ -437,6 +441,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: TextField(
               controller: _searchController,
+              textDirection: TextDirection.rtl,
               textAlign: TextAlign.right,
               onChanged: _search,
               decoration: InputDecoration(
@@ -547,6 +552,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         ),
         title: Text(
           item['name'] ?? '',
+          textDirection: TextDirection.rtl,
           textAlign: TextAlign.right,
           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
         ),

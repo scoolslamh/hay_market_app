@@ -273,6 +273,7 @@ class _MerchantOffersScreenState extends State<MerchantOffersScreen> {
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
+                    textDirection: TextDirection.rtl,
                     textAlign: TextAlign.right,
                   ),
 
@@ -411,6 +412,7 @@ class _AddOfferSheetState extends State<_AddOfferSheet> {
   final discountedPriceController = TextEditingController();
 
   File? imageFile;
+  String? _prefillImageUrl;
   bool isLoading = false;
   bool isUploadingImage = false;
 
@@ -440,7 +442,7 @@ class _AddOfferSheetState extends State<_AddOfferSheet> {
     try {
       final data = await supabase
           .from('products')
-          .select('id, name, price')
+          .select('id, name, price, image_url')
           .eq('market_id', widget.marketId)
           .order('name', ascending: true);
       if (mounted) {
@@ -453,10 +455,71 @@ class _AddOfferSheetState extends State<_AddOfferSheet> {
     }
   }
 
-  Future<void> _pickImage() async {
+  void _showImageSourceSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 40, height: 4,
+              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+            const SizedBox(height: 20),
+            const Text("اختر مصدر الصورة",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _primaryDark)),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(child: _sourceButton(
+                  icon: Icons.camera_alt_outlined,
+                  label: "الكاميرا",
+                  onTap: () { Navigator.pop(context); _pickImage(ImageSource.camera); },
+                )),
+                const SizedBox(width: 12),
+                Expanded(child: _sourceButton(
+                  icon: Icons.photo_library_outlined,
+                  label: "المعرض",
+                  onTap: () { Navigator.pop(context); _pickImage(ImageSource.gallery); },
+                )),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sourceButton({required IconData icon, required String label, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE8F5E9),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: _primaryDark, size: 32),
+            const SizedBox(height: 8),
+            Text(label, style: const TextStyle(color: _primaryDark, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
     try {
       final picked = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
+        source: source,
         imageQuality: 75,
         maxWidth: 900,
       );
@@ -530,7 +593,7 @@ class _AddOfferSheetState extends State<_AddOfferSheet> {
       AppNotification.warning(context, "أدخل عنوان العرض");
       return;
     }
-    if (imageFile == null) {
+    if (imageFile == null && (_prefillImageUrl == null || _prefillImageUrl!.isEmpty)) {
       AppNotification.warning(context, "اختر صورة للعرض");
       return;
     }
@@ -547,11 +610,16 @@ class _AddOfferSheetState extends State<_AddOfferSheet> {
     setState(() => isLoading = true);
 
     try {
-      final uploadedUrl = await _uploadImage();
-      if (uploadedUrl == null) {
-        if (mounted) AppNotification.error(context, "فشل رفع الصورة");
-        setState(() => isLoading = false);
-        return;
+      String? uploadedUrl;
+      if (imageFile != null) {
+        uploadedUrl = await _uploadImage();
+        if (uploadedUrl == null) {
+          if (mounted) AppNotification.error(context, "فشل رفع الصورة");
+          setState(() => isLoading = false);
+          return;
+        }
+      } else {
+        uploadedUrl = _prefillImageUrl ?? '';
       }
 
       String? productName;
@@ -623,13 +691,14 @@ class _AddOfferSheetState extends State<_AddOfferSheet> {
                 fontWeight: FontWeight.bold,
                 color: _primaryDark,
               ),
+              textDirection: TextDirection.rtl,
               textAlign: TextAlign.right,
             ),
             const SizedBox(height: 20),
 
             // ── اختيار الصورة ──
             GestureDetector(
-              onTap: isLoading ? null : _pickImage,
+              onTap: isLoading ? null : _showImageSourceSheet,
               child: Container(
                 height: 150,
                 width: double.infinity,
@@ -637,7 +706,7 @@ class _AddOfferSheetState extends State<_AddOfferSheet> {
                   color: const Color(0xFFF0F4F0),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: imageFile != null ? _primary : Colors.grey.shade200,
+                    color: imageFile != null || _prefillImageUrl != null ? _primary : Colors.grey.shade200,
                     width: 1.5,
                   ),
                 ),
@@ -650,18 +719,10 @@ class _AddOfferSheetState extends State<_AddOfferSheet> {
                       : imageFile != null
                           ? Image.file(imageFile!,
                               fit: BoxFit.cover, width: double.infinity)
-                          : Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.add_photo_alternate_outlined,
-                                    size: 44, color: Colors.grey[400]),
-                                const SizedBox(height: 8),
-                                Text("اضغط لاختيار صورة العرض",
-                                    style: TextStyle(
-                                        color: Colors.grey[500],
-                                        fontSize: 13)),
-                              ],
-                            ),
+                          : _prefillImageUrl != null
+                              ? Image.network(_prefillImageUrl!, fit: BoxFit.cover, width: double.infinity,
+                                  errorBuilder: (_, url, err) => _buildImagePlaceholder())
+                              : _buildImagePlaceholder(),
                 ),
               ),
             ),
@@ -702,6 +763,11 @@ class _AddOfferSheetState extends State<_AddOfferSheet> {
                           products.firstWhere((p) => p['id'] == val);
                       originalPriceController.text =
                           p['price'].toString();
+                      final productImageUrl = p['image_url']?.toString();
+                      if (productImageUrl != null && productImageUrl.isNotEmpty) {
+                        imageFile = null;
+                        _prefillImageUrl = productImageUrl;
+                      }
                     }
                   });
                 },
@@ -718,6 +784,7 @@ class _AddOfferSheetState extends State<_AddOfferSheet> {
                     label: "سعر بعد الخصم ﷼",
                     icon: Icons.price_check,
                     keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.next,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -727,6 +794,7 @@ class _AddOfferSheetState extends State<_AddOfferSheet> {
                     label: "السعر الأصلي ﷼",
                     icon: Icons.payments_outlined,
                     keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.done,
                   ),
                 ),
               ],
@@ -793,6 +861,18 @@ class _AddOfferSheetState extends State<_AddOfferSheet> {
     );
   }
 
+  Widget _buildImagePlaceholder() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.add_photo_alternate_outlined, size: 44, color: Colors.grey[400]),
+        const SizedBox(height: 8),
+        Text("اضغط لاختيار أو التقاط صورة",
+            style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+      ],
+    );
+  }
+
   Widget _buildDateButton({
     required String label,
     required DateTime? date,
@@ -825,6 +905,7 @@ class _AddOfferSheetState extends State<_AddOfferSheet> {
                   fontWeight:
                       hasDate ? FontWeight.w600 : FontWeight.normal,
                 ),
+                textDirection: TextDirection.rtl,
                 textAlign: TextAlign.right,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -844,11 +925,14 @@ class _AddOfferSheetState extends State<_AddOfferSheet> {
     required String label,
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
+    TextInputAction textInputAction = TextInputAction.next,
   }) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
+      textDirection: TextDirection.rtl,
       textAlign: TextAlign.right,
+      textInputAction: textInputAction,
       decoration: _fieldDecoration(label, icon),
     );
   }
